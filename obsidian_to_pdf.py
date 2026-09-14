@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """
 obsidian_to_pdf.py — Compile an Obsidian vault into a print-style PDF via
-WeasyPrint. Originally built to match the layout of SS1's professionally
-typeset reference PDF:
-
-    /home/rum/Dropbox/TEXT/SS/SSBK1/SSI_backup/
-        Silent Subversion I-SECRETS WANT OUT_Hyrum Jones-6.pdf
-
-That layout (fonts, margin ratios, POV sign-image feature) is now the
+WeasyPrint. Originally built to match the layout of a professionally
+typeset reference PDF supplied by the user (a prior print edition of their
+own novel). That layout (fonts, margin ratios, POV sign-image feature) is now the
 default house style, driven per book by Book Info.md fields rather than
 hardcoded to SS1 specifically.
 
@@ -50,7 +46,7 @@ script additionally reads, all optional:
     trim_size: "5.25in 8in"                # CSS @page size (width height); default "5.25in 8in"
     running_header: "SILENT SUBVERSION 1" # chapter-page running header text; defaults to
                                            # title.upper() if not given
-    pov_signs_dir: "/home/rum/Dropbox/TEXT/SS/YourSign"
+    pov_signs_dir: "/home/user/Books/MyNovel/pov-signs"
     pov_signs: "Gerald=Gerald-Sign.png, Taylor=Taylor-Sign.png"  # comma-separated name=file pairs
 """
 

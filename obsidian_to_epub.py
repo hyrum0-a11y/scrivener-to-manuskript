@@ -50,7 +50,7 @@ Obsidian anywhere in the note):
     publisher: "Anxiety Publishing"
     isbn: "9780997210712"
     cover: "SS1-final-ebook-small.jpg"
-    output_dir: "/home/rum/Dropbox/TEXT/SS/SSBK1/Obsidian Epub Export"
+    output_dir: "/home/user/Books/MyNovel/exports"
     series: "Cloud World, Book 2"
     ```
 
