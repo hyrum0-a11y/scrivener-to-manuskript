@@ -1,0 +1,105 @@
+body {
+  text-align: justify;
+}
+
+p {
+  margin: 0;
+  text-indent: 1rem;
+}
+
+h1, h2, h3 {
+  text-align: center;
+}
+
+h1 {
+  font-size: 2em;
+  font-weight: bold;
+}
+
+h2 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 2.5rem 0 0.89rem 0;
+}
+
+.noindent p,
+.dropcap p {
+  text-indent: 0;
+}
+
+.dropcap p::first-letter {
+  /* Raised-cap style: no float, so the letter sits inline on the
+     paragraph's own first line (no wraparound into line 2/3) and simply
+     extends upward from the shared baseline — matches obsidian_to_pdf.py's
+     .dropcap-letter treatment. */
+  font-size: 3em;
+  line-height: 1;
+  font-weight: bold;
+  margin-right: 0.1em;
+}
+
+.sep p {
+  text-align: center;
+  text-indent: 0;
+  margin: 1.5em 0;
+}
+
+.correspondence {
+  margin: 1em 0;
+}
+
+.correspondence p {
+  text-indent: 0;
+  margin: 0;
+}
+
+.povname p {
+  text-align: center;
+  text-indent: 0;
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+.chapterdate p {
+  text-indent: 0;
+  font-size: 0.9em;
+}
+
+.partsubtitle p {
+  text-align: center;
+  text-indent: 0;
+  font-size: 2em;
+  font-weight: bold;
+}
+
+.epigraph p {
+  text-align: center;
+  text-indent: 0;
+  font-style: italic;
+  font-size: 1.2em;
+  line-height: 1.8em;
+}
+
+.centered p {
+  text-align: center;
+  text-indent: 0;
+  margin: 0 0 1em 0;
+}
+
+/* Pandoc also stamps the heading's class onto its wrapping <section>, so
+   these must target the h1 element specifically — a bare .fbm-title /
+   .hidden-title rule would resize or hide the whole section's content. */
+h1.fbm-title {
+  font-size: 1.5em;
+}
+
+h1.hidden-title {
+  display: none;
+}
+
+nav#toc ol {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  line-height: 1.5em;
+}

@@ -113,10 +113,20 @@ def rtf_to_text(rtf_path: Path, fmt: str = "plain") -> str:
     # Remove 4-space leading indents that pandoc adds from RTF paragraph styles.
     # In a novel manuscript these are never intentional code blocks.
     text = re.sub(r"^    ", "", text, flags=re.MULTILINE)
-    # Replace asterisks used as note markers with ※ so they don't interfere
-    # with markdown emphasis syntax. In plain-text output all remaining * are
-    # literal characters the author typed (not RTF formatting artifacts).
-    text = text.replace("*", "※")
+    if fmt == "markdown":
+        # Pandoc wraps RTF decorative-font spans in backticks as "inline code".
+        # Novel prose never contains actual code, so strip all backticks.
+        text = text.replace("`", "")
+        # Convert author note markers (lines starting with ***+ text) to
+        # Obsidian comment syntax so they don't interfere with markdown.
+        text = re.sub(r"^\*{3,}\s*$", "---", text, flags=re.MULTILINE)
+        text = re.sub(r"^\*{3,}(.+)$",
+                      lambda m: f"%%{m.group(1).strip()}%%",
+                      text, flags=re.MULTILINE)
+    else:
+        # In plain-text output pandoc emits raw * for emphasis; replace with ※
+        # so they don't accidentally trigger markdown parsers downstream.
+        text = text.replace("*", "※")
     # Collapse more than 2 consecutive blank lines into 2
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
