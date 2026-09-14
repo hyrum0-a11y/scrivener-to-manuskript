@@ -1,0 +1,9 @@
+{
+  "serverUrl": "http://127.0.0.1:8081",
+  "urlMode": "custom",
+  "glassBg": false,
+  "shouldAutoCheck": false,
+  "autoCheckDelay": 3000,
+  "pickyMode": true,
+  "motherTongue": "en"
+}

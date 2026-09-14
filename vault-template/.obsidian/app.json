@@ -1,0 +1,19 @@
+{
+  "showInlineTitle": true,
+  "propertiesInDocument": "hidden",
+  "pdfExportSettings": {
+    "includeName": true,
+    "pageSize": "Letter",
+    "landscape": false,
+    "margin": "0",
+    "downscalePercent": 100
+  },
+  "foldIndent": true,
+  "showUnsupportedFiles": false,
+  "showLineNumber": false,
+  "showIndentGuide": false,
+  "smartIndentList": true,
+  "tabSize": 3,
+  "alwaysUpdateLinks": true,
+  "spellcheckDictionary": []
+}

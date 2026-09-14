@@ -1,0 +1,11 @@
+{
+  "cssTheme": "Minimal",
+  "enabledCssSnippets": [
+    "writer-mode"
+  ],
+  "baseFontSize": 21,
+  "showViewHeader": true,
+  "showRibbon": true,
+  "baseFontSizeAction": true,
+  "textFontFamily": "Noto Sans Vithkuqi"
+}

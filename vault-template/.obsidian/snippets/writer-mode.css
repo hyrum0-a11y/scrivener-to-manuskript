@@ -1,0 +1,26 @@
+/* --- ZONE 1: TYPOGRAPHY & SMART INDENTS --- */
+
+/* Justify text */
+.markdown-source-view.mod-cm6 .cm-content,
+.markdown-rendered {
+    text-align: justify;
+}
+
+/* 1. Global Reset: Kill all default indents and gaps */
+.markdown-source-view.mod-cm6 .cm-line,
+.markdown-rendered p {
+    text-indent: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* 2. Selective Indent: ONLY indent lines that are NOT headers, lists, or quotes */
+/* This handles Live Preview (Editing Mode) */
+.markdown-source-view.mod-cm6 .cm-line:not(.cm-header):not(.cm-list-indent):not(.HyperMD-quote):not(.HyperMD-list-line) + .cm-line:not(.cm-header):not(.cm-list-indent):not(.HyperMD-quote):not(.HyperMD-list-line) {
+    text-indent: 1.4em !important;
+}
+
+/* This handles Reading Mode */
+.markdown-rendered p + p {
+    text-indent: 1.5em !important;
+}

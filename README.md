@@ -102,6 +102,12 @@ repeatable compiles to distributable formats. One vault = one book. Works
 with any number of books side by side — nothing is hardcoded per-book;
 everything comes from two files at the vault root.
 
+**[`vault-template/`](vault-template/)** is a ready-to-copy starting point —
+a real (if tiny) vault in this exact convention, complete with a working
+Obsidian setup (theme, plugins, editor preferences), that compiles as-is.
+Copy it, edit `Book Info.md` and `Manuscript Reading Order.md`, and start
+writing. See its own README for details.
+
 ### The vault convention
 
 **`Manuscript Reading Order.md`** is the single source of truth for compile
