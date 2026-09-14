@@ -169,14 +169,17 @@ python3 obsidian_to_epub.py <vault> [--output-dir DIR]
 python3 obsidian_to_pdf.py <vault> [--output-dir DIR]
 ```
 
+**`obsidian_to_odt.py`** — compiles the same vault into an ODT (OpenDocument Text) manuscript via pandoc, for further formatting in a word processor or handing to an editor/proofreader who wants a plain document. Reuses `obsidian_to_epub.py`'s document assembly directly, so it needs no per-book setup beyond the same `Manuscript Reading Order.md`/`Book Info.md` — but pandoc's ODT writer drops the epub-only styling classes, so the result is plain paragraphs (bold/italic preserved) with none of the epub/PDF's drop caps, centered POV names, or page layout. An editable draft format, not a finished distributable.
+```
+python3 obsidian_to_odt.py <vault> [--output-dir DIR]
+```
+
 **`epub_to_obsidian.py`** — the reverse direction: turns an already-published epub into a vault in this same convention (chapters/scenes recovered from the epub's table of contents and its `—※—` scene-break markers), so you can bring an existing book under this workflow.
 ```
 python3 epub_to_obsidian.py NOVEL.epub [--title "My Novel"] [--author "Your Name"] [--output ./output]
 ```
 
 **`epub_style.css`** — the stylesheet `obsidian_to_epub.py` compiles with (`obsidian_to_pdf.py` uses its own equivalent CSS inline, tuned for print). Covers drop caps, POV/chapter-date header lines, part epigraphs, scene separators, and front/back-matter styling.
-
-**`compile_book.py`** — an older, single-book ODT exporter (pandoc + a patched `reference.odt` for justified/indented paragraph styling) that predates the vault pipeline above. Kept as a simpler starting point if you just want ODT output and don't need the full Reading-Order/Book-Info convention — its paths are hardcoded for one specific book, so treat it as a template to copy rather than a general-purpose tool.
 
 ---
 
