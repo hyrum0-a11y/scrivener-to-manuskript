@@ -13,3 +13,9 @@ output/
 *.epub
 *.pdf
 *.msk/
+
+# Personal local-only tools — never published to the public repo (same
+# treatment as piper_reader.py / kbd-backlight-setup.md, which are simply
+# never git-added rather than pattern-matched here, since those predate
+# this file). dashboard/'s config.py hardcodes real personal vault paths.
+dashboard/
