@@ -64,24 +64,54 @@ the ODT bookmark name rather than auto-slugifying the heading text, so
 retarget_headings() can find each one reliably by name in the compiled
 output's content.xml, rather than by fragile position-counting.
 
+Each Part opener must land on a right-hand (recto) page, matching the
+PDF's own behavior, inserting a real blank left page first if needed. ODF
+has no static markup for this (`fo:break-before="right-page"` is silently
+ignored by LibreOffice's ODT filter — confirmed by direct testing), and
+LibreOffice's own live-editing view computes and inserts such a blank page
+automatically when a page-number restart lands on the wrong side — but
+that auto-inserted page is a layout-only artifact that its own PDF export
+filter silently drops, so it never survives to the actual output. There is
+one persistent, apparently unavoidable side effect: LibreOffice's live
+view still shows one extra blank page of its own near the front matter,
+regardless of any real content placed before it — a harmless editing-view
+quirk confirmed to never appear in any exported/printed copy. fix_recto_
+pages() below works around all of this by driving a real headless
+LibreOffice instance (via its UNO scripting API) as a post-processing
+pass: export to PDF, check where each Part opener actually lands, and if
+one is on an even (verso) page, splice in a real blank paragraph before it
+and repeat — since fixing one Part can shift every later one, this repeats
+until a full pass finds nothing left to fix.
+
 Requirements:
   - Python 3.10+
   - pandoc  (https://pandoc.org/installing.html)
+  - a native LibreOffice install (provides both `soffice` and the `uno`
+    Python module used for the recto-page fix pass above) — a Flatpak
+    install does not expose `uno` to the system Python and is not
+    supported here
+  - pymupdf  (pip install pymupdf, or pacman -S python-pymupdf)
 
 Usage:
     python3 obsidian_to_odt.py <vault> [--output-dir DIR]
 """
 
 import argparse
+import functools
 import io
 import re
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
+
+import pymupdf
+import uno
+from com.sun.star.beans import PropertyValue
 
 from obsidian_to_epub import (
     BLANK_LINE,
@@ -254,25 +284,32 @@ def patch_named_styles(xml: str) -> str:
     return xml
 
 
-def patch_master_pages(xml: str, author: str, running_header: str) -> str:
-    """Define the three master pages: "Standard" (title page + front
-    matter — pandoc's default footer stripped, no header added), a new
-    empty "PartOpener" (each Part's own opening page — no header, same
-    page geometry), and a new "ChapterBody" (the manuscript body — an
-    alternating left/right header, matching the PDF: page number at the
-    outer edge, author centered on left/even pages, book title centered on
-    right/odd pages; no footer). Which master page is actually active on a
-    given page is controlled entirely by retarget_headings() (content.xml,
-    post-pandoc) — this function only *defines* the three; none of them
-    are wired to specific headings here.
+def patch_master_pages(xml: str, author: str, running_header: str, chapter_count: int) -> str:
+    """Define the master pages: "Standard" (title page + front matter —
+    pandoc's default footer stripped, no header added), a new empty
+    "PartOpener" (each Part's own opening page — no header, same page
+    geometry), and one "ChapterBody{N}" per chapter in the book (N =
+    0..chapter_count-1) instead of a single shared one. Which master page
+    is actually active on a given page is controlled entirely by
+    retarget_headings() (content.xml, post-pandoc) — this function only
+    *defines* them; none are wired to specific headings here.
 
-    The left/right alternation uses ODF's native mirrored-page-style
-    mechanism (style:page-usage="mirrored" on the page-layout, plus a
-    <style:header-left> alongside the normal <style:header>) — confirmed
-    via isolated testing to work reliably and unconditionally, independent
-    of the mid-document master-page *switching* retarget_headings() does
-    (a different, previously-broken-by-a-placement-bug mechanism — see
-    this module's docstring)."""
+    Every chapter needs its *own* master page, not a shared one, because
+    of how ODF suppresses the header on a chapter's own opening page: a
+    <style:header-first> (blank) alongside the normal <style:header> only
+    suppresses the header on that master page's very *first* use in the
+    whole document — confirmed by direct testing that a second, later
+    switch back to the same master page does NOT get the same suppression.
+    Giving each chapter a private master page (used exactly once) sidesteps
+    that limitation entirely: its "first use" is its only use.
+
+    The left/right alternation itself uses a different, unrelated ODF
+    mechanism — style:page-usage="mirrored" on the page-layout, plus a
+    <style:header-left> alongside <style:header> — confirmed via isolated
+    testing to work reliably and unconditionally, independent of the
+    mid-document master-page *switching* retarget_headings() does (a
+    separate, previously-broken-by-a-placement-bug mechanism — see this
+    module's docstring)."""
     author_text = escape(author.upper())
     title_text = escape(running_header)
 
@@ -335,15 +372,23 @@ def patch_master_pages(xml: str, author: str, running_header: str) -> str:
         '</text:p></style:header-left>'
     )
 
+    # A blank header-first suppresses the header on each chapter's own
+    # opening page; the normal header/header-left still apply from that
+    # chapter's second page onward, whichever side it lands on.
+    header_first_blank = (
+        '<style:header-first><text:p text:style-name="Header"></text:p></style:header-first>'
+    )
+
     part_opener_master = '<style:master-page style:name="PartOpener" style:page-layout-name="Mpm1" />'
-    chapter_body_master = (
-        '<style:master-page style:name="ChapterBody" style:page-layout-name="Mpm1">'
-        f'{header_right}{header_left}'
+    chapter_body_masters = "".join(
+        f'<style:master-page style:name="ChapterBody{n}" style:page-layout-name="Mpm1">'
+        f'{header_right}{header_left}{header_first_blank}'
         '</style:master-page>'
+        for n in range(chapter_count)
     )
     xml = xml.replace(
         "</office:master-styles>",
-        part_opener_master + chapter_body_master + "</office:master-styles>",
+        part_opener_master + chapter_body_masters + "</office:master-styles>",
         1,
     )
 
@@ -377,10 +422,11 @@ def _heading_switch_style(tag: str) -> tuple[str, str] | None:
         )
         return name, xml
     if tag.startswith("chapter-open-"):
-        name = "ChapterOpen"
+        n = tag[len("chapter-open-"):]
+        name = f"ChapterOpen{n}"
         xml = (
             f'<style:style style:name="{name}" style:family="paragraph" '
-            'style:parent-style-name="Heading_20_2" style:master-page-name="ChapterBody">'
+            f'style:parent-style-name="Heading_20_2" style:master-page-name="ChapterBody{n}">'
             '<style:paragraph-properties fo:break-before="page" />'
             '</style:style>'
         )
@@ -439,7 +485,7 @@ def retarget_headings(content_xml: str) -> str:
     return content_xml
 
 
-def build_reference_odt(author: str, running_header: str) -> None:
+def build_reference_odt(author: str, running_header: str, chapter_count: int) -> None:
     """(Re)generate reference.odt next to this script, with all the patches
     above applied to pandoc's default ODT template. Rebuilt on every run so
     it always matches the current patch functions and the current book's
@@ -456,7 +502,7 @@ def build_reference_odt(author: str, running_header: str) -> None:
             data = src.read(name)
             if name == "styles.xml":
                 xml = patch_named_styles(data.decode())
-                xml = patch_master_pages(xml, author, running_header)
+                xml = patch_master_pages(xml, author, running_header, chapter_count)
                 data = xml.encode()
             dst.writestr(name, data)
     REFERENCE_ODT.write_bytes(dst_buf.getvalue())
@@ -590,11 +636,13 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
 
     # Every Part heading is tagged so retarget_headings() can switch it to
     # the no-header "PartOpener" master page — the first one additionally
-    # restarts the page count there. Each Part's *first* chapter is tagged
-    # so retarget_headings() can switch it to "ChapterBody" (header on);
-    # later chapters in the same Part are left untagged — nothing switches
-    # master page away from "ChapterBody" for them, so they just continue
-    # using it, which is exactly what's wanted.
+    # restarts the page count there. Every chapter heading is tagged too,
+    # each with its own globally-unique index — retarget_headings() switches
+    # each one to its own private "ChapterBody{n}" master page (see
+    # patch_master_pages()'s docstring for why each chapter needs its own
+    # master page rather than sharing one, to suppress the header correctly
+    # on every chapter's own opening page, not just each Part's first).
+    global_chapter_idx = 0
     for part_idx, part in enumerate(parts):
         m = PART_TITLE_RE.match(part.title)
         heading, subtitle_part = (m.group(1).upper(), m.group(2)) if m else (part.title, "")
@@ -606,8 +654,9 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
             poem = "  \n".join(part.epigraph)
             chunks.append(f'::: {{custom-style="Epigraph"}}\n{poem}\n:::')
 
-        for chapter_idx, chapter in enumerate(part.chapters):
-            chapter_id_attr = f" {{#chapter-open-{part_idx}}}" if chapter_idx == 0 else ""
+        for chapter in part.chapters:
+            chapter_id_attr = f" {{#chapter-open-{global_chapter_idx}}}"
+            global_chapter_idx += 1
             chunks.append(f"## {chapter.title.upper()}{chapter_id_attr}")
             if chapter.pov:
                 chunks.append(f'::: {{custom-style="POVName"}}\n{chapter.pov}\n:::')
@@ -649,6 +698,128 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
     return "\n\n".join(c for c in chunks if c)
 
 
+def _uno_connect():
+    local_context = uno.getComponentContext()
+    resolver = local_context.ServiceManager.createInstanceWithContext(
+        "com.sun.star.bridge.UnoUrlResolver", local_context)
+    ctx = resolver.resolve(
+        "uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
+    smgr = ctx.ServiceManager
+    return smgr.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
+
+
+def _get_desktop(max_wait: float = 20.0):
+    """Connect to a running headless LibreOffice instance, spawning one first if needed."""
+    try:
+        return _uno_connect()
+    except Exception:
+        pass
+    subprocess.Popen(
+        ["soffice", "--headless", "--invisible", "--nologo", "--nofirststartwizard",
+         "--accept=socket,host=localhost,port=2002;urp;"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    deadline = time.time() + max_wait
+    while time.time() < deadline:
+        time.sleep(0.5)
+        try:
+            return _uno_connect()
+        except Exception:
+            continue
+    raise RuntimeError("Could not connect to a headless LibreOffice instance (is `soffice` installed?)")
+
+
+def _uno_load(desktop, path: Path):
+    prop = PropertyValue()
+    prop.Name = "Hidden"
+    prop.Value = True
+    return desktop.loadComponentFromURL(f"file://{path}", "_blank", 0, (prop,))
+
+
+def _uno_export_pdf(doc, pdf_path: Path) -> None:
+    prop = PropertyValue()
+    prop.Name = "FilterName"
+    prop.Value = "writer_pdf_Export"
+    doc.storeToURL(f"file://{pdf_path}", (prop,))
+
+
+def _uno_save_odt(doc, path: Path) -> None:
+    prop = PropertyValue()
+    prop.Name = "FilterName"
+    prop.Value = "writer8"
+    doc.storeToURL(f"file://{path}", (prop,))
+
+
+def _ordered_bookmarks(doc, prefix: str):
+    """All bookmarks starting with `prefix`, in document order (not name order)."""
+    names = [n for n in doc.Bookmarks.getElementNames() if n.startswith(prefix)]
+    marks = [(n, doc.Bookmarks.getByName(n)) for n in names]
+
+    def cmp(a, b):
+        return -doc.Text.compareRegionStarts(a[1].Anchor.Start, b[1].Anchor.Start)
+
+    marks.sort(key=functools.cmp_to_key(cmp))
+    return marks
+
+
+def _bookmark_heading_text(doc, bookmark) -> str:
+    cur = doc.Text.createTextCursorByRange(bookmark.Anchor.Start)
+    cur.gotoEndOfParagraph(True)
+    return cur.getString().strip()
+
+
+def _pdf_page_for_text(pdf_path: Path, needle: str) -> int | None:
+    doc = pymupdf.open(pdf_path)
+    try:
+        for i in range(doc.page_count):
+            if needle in doc[i].get_text("text"):
+                return i + 1  # 1-indexed
+    finally:
+        doc.close()
+    return None
+
+
+def fix_recto_pages(output: Path, bookmark_prefix: str = "part-open",
+                     blank_master: str = "Standard", max_iters: int = 10) -> None:
+    """Force every Part opener onto a right-hand (recto) page, inserting a
+    real blank page before it when needed — see the module docstring for
+    why this can't be done with static ODF markup and has to be driven
+    live through LibreOffice itself."""
+    desktop = _get_desktop()
+    pdf_check = output.with_name(output.stem + "_rectocheck.pdf")
+
+    for _ in range(max_iters):
+        doc = _uno_load(desktop, output)
+        _uno_export_pdf(doc, pdf_check)
+        marks = _ordered_bookmarks(doc, bookmark_prefix)
+
+        bad = None
+        for name, bm in marks:
+            text = _bookmark_heading_text(doc, bm)
+            page = _pdf_page_for_text(pdf_check, text)
+            if bad is None and page is not None and page % 2 == 0:
+                bad = bm
+
+        if bad is None:
+            doc.close(False)
+            pdf_check.unlink(missing_ok=True)
+            return
+
+        t = doc.Text
+        insert_cur = t.createTextCursorByRange(bad.Anchor.Start)
+        insert_cur.gotoStartOfParagraph(False)
+        t.insertControlCharacter(
+            insert_cur, uno.getConstantByName("com.sun.star.text.ControlCharacter.PARAGRAPH_BREAK"), False)
+        pad_cur = t.createTextCursorByRange(insert_cur.Start)
+        pad_cur.gotoPreviousParagraph(False)
+        pad_cur.PageDescName = blank_master
+        _uno_save_odt(doc, output)
+        doc.close(False)
+
+    pdf_check.unlink(missing_ok=True)
+    raise RuntimeError(f"fix_recto_pages: didn't converge after {max_iters} passes")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compile an Obsidian vault into an ODT manuscript (pandoc). "
@@ -674,8 +845,14 @@ def main() -> None:
     output = (output_dir / f"{book_info['title']}_{timestamp}.odt").resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
 
+    reading_order_path = vault / "Manuscript Reading Order.md"
+    if not reading_order_path.is_file():
+        sys.exit(f"ERROR: {reading_order_path} not found — it defines the compile order.")
+    _, parts_preview, _ = parse_reading_order(reading_order_path)
+    chapter_count = sum(len(part.chapters) for part in parts_preview)
+
     print("Building reference styles...")
-    build_reference_odt(book_info["author"], running_header)
+    build_reference_odt(book_info["author"], running_header, chapter_count)
 
     print("Assembling manuscript...")
     content = build_document_odt(vault, book_info)
@@ -701,6 +878,9 @@ def main() -> None:
 
     print("Fixing heading/body styles pandoc doesn't preserve from reference.odt...")
     patch_output_odt(output)
+
+    print("Forcing Part openers onto right-hand pages (headless LibreOffice pass)...")
+    fix_recto_pages(output)
 
     print(f"Done. Written: {output}")
 
