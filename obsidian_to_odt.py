@@ -28,12 +28,17 @@ Only parsing (parse_reading_order, parse_book_info, index_vault_files,
 etc.) is shared with obsidian_to_epub.py; both epub and PDF already have
 their own independent renderers, and ODT now does too.
 
-The header lives in the page header itself (page number + book title, no
-footer) — matching where the PDF puts these, though as one consistent
-layout rather than the PDF's alternating left/right page design. It
-appears on every page, including the title page and front matter, and the
-page count runs continuously from the title page rather than restarting at
-the manuscript body.
+The header lives in the page header itself (no footer), alternating
+left/right pages exactly like the PDF: page number at the outer edge,
+author centered on left (even) pages, book title centered on right (odd)
+pages. This uses ODF's native mirrored-page-style mechanism
+(style:page-usage="mirrored" + a <style:header-left> alongside the normal
+<style:header>) — a completely different, and far more reliable, mechanism
+than the mid-document master-page *switching* described below; confirmed
+via isolated testing to alternate correctly on every page. It appears on
+every page, including the title page and front matter, and the page count
+runs continuously from the title page rather than restarting at the
+manuscript body.
 
 A restart-at-1-on-the-manuscript-body attempt IS included (see
 restart_page_numbering()) via the spec-correct ODF technique — a
@@ -229,24 +234,39 @@ def patch_named_styles(xml: str) -> str:
     return xml
 
 
-def patch_master_pages(xml: str, running_header: str) -> str:
-    """Give both master pages a header — page number, then the running
-    header text at a center tab stop — and no footer at all (matches where
-    the PDF puts these: page number in the header, no footer). "Standard"
-    is used from the very start (title page, front matter); "Manuscript" is
-    switched to at the first Part heading by restart_page_numbering(),
-    an attempt at restarting the page count there that's unverified — see
-    this module's docstring. The two master pages are deliberately given
-    the IDENTICAL header design: if that switch silently does nothing (the
-    expectation per the docstring), the page just keeps counting with the
-    same-looking header, rather than something visibly breaking."""
-    header_text = escape(running_header)
+def patch_master_pages(xml: str, author: str, running_header: str) -> str:
+    """Give both master pages an alternating left/right header — matching
+    the PDF exactly: page number at the outer edge, author centered on
+    left (even) pages, book title centered on right (odd) pages — and no
+    footer at all. Uses ODF's native mirrored-page-style mechanism
+    (style:page-usage="mirrored" on the page-layout, plus a
+    <style:header-left> alongside the normal <style:header> on the master
+    page) rather than any mid-document switching — confirmed via isolated
+    testing that this alternates correctly and reliably on every page,
+    unlike the mid-document master-page switch in restart_page_numbering()
+    below, which does not reliably do anything.
 
+    "Standard" is used from the very start (title page, front matter);
+    "Manuscript" is switched to at the first Part heading by
+    restart_page_numbering(), an attempt at restarting the page count
+    there that's unverified — see this module's docstring. The two master
+    pages are deliberately given the IDENTICAL header design: if that
+    switch silently does nothing (the expectation per the docstring), the
+    page just keeps counting (still correctly alternating) instead of
+    restarting, rather than something visibly breaking."""
+    author_text = escape(author.upper())
+    title_text = escape(running_header)
+
+    # One shared paragraph style: a "center" tab stop for the centered
+    # author/title, a "right" tab stop for the page number on right pages.
     header_style = (
         '<style:style style:name="Header" style:family="paragraph" '
         'style:parent-style-name="Standard" style:class="extra">'
         '<style:paragraph-properties fo:text-align="left">'
-        '<style:tab-stops><style:tab-stop style:position="3.25in" style:type="center" /></style:tab-stops>'
+        '<style:tab-stops>'
+        '<style:tab-stop style:position="3.25in" style:type="center" />'
+        '<style:tab-stop style:position="6.5in" style:type="right" />'
+        '</style:tab-stops>'
         '</style:paragraph-properties>'
         f'<style:text-properties fo:font-family="{HEADING_FONT}" fo:font-weight="bold" '
         'fo:font-size="8.5pt" fo:letter-spacing="0.02in" />'
@@ -265,23 +285,40 @@ def patch_master_pages(xml: str, running_header: str) -> str:
         1,
     )
 
-    header_paragraph = (
-        '<text:p text:style-name="Header">'
+    # Without page-usage="mirrored" on the page-layout, LibreOffice ignores
+    # <style:header-left> entirely and every page just uses <style:header>.
+    xml = xml.replace(
+        '<style:page-layout-properties',
+        '<style:page-layout-properties style:page-usage="mirrored"',
+        1,
+    )
+
+    # Right (odd) pages: title centered, page number at the right edge.
+    header_right = (
+        '<style:header><text:p text:style-name="Header">'
+        f'<text:tab/>{title_text}<text:tab/>'
         '<text:page-number text:select-page="current">1</text:page-number>'
-        f'<text:tab/>{header_text}</text:p>'
+        '</text:p></style:header>'
+    )
+    # Left (even) pages: page number at the left edge, author centered.
+    header_left = (
+        '<style:header-left><text:p text:style-name="Header">'
+        '<text:page-number text:select-page="current">1</text:page-number>'
+        f'<text:tab/>{author_text}'
+        '</text:p></style:header-left>'
     )
 
     # "Standard" ships with a footer (pandoc's default page-number one) —
     # drop it, the page number now lives in the header instead.
     xml = re.sub(
         r'(<style:master-page style:name="Standard"[^>]*>)\s*<style:footer>.*?</style:footer>\s*(</style:master-page>)',
-        rf'\1<style:header>{header_paragraph}</style:header>\2',
+        rf'\1{header_right}{header_left}\2',
         xml, count=1, flags=re.DOTALL,
     )
 
     manuscript_master = (
-        f'<style:master-page style:name="Manuscript" style:page-layout-name="Mpm1">'
-        f'<style:header>{header_paragraph}</style:header>'
+        '<style:master-page style:name="Manuscript" style:page-layout-name="Mpm1">'
+        f'{header_right}{header_left}'
         '</style:master-page>'
     )
     xml = xml.replace("</office:master-styles>", manuscript_master + "</office:master-styles>", 1)
@@ -336,12 +373,12 @@ def restart_page_numbering(content_xml: str) -> str:
     )
 
 
-def build_reference_odt(running_header: str) -> None:
+def build_reference_odt(author: str, running_header: str) -> None:
     """(Re)generate reference.odt next to this script, with all the patches
     above applied to pandoc's default ODT template. Rebuilt on every run so
     it always matches the current patch functions and the current book's
-    running header — not checked into git (see .gitignore), same as the
-    old compile_book.py convention."""
+    author/running header — not checked into git (see .gitignore), same as
+    the old compile_book.py convention."""
     result = subprocess.run(
         ["pandoc", "--print-default-data-file", "reference.odt"],
         capture_output=True,
@@ -353,7 +390,7 @@ def build_reference_odt(running_header: str) -> None:
             data = src.read(name)
             if name == "styles.xml":
                 xml = patch_named_styles(data.decode())
-                xml = patch_master_pages(xml, running_header)
+                xml = patch_master_pages(xml, author, running_header)
                 data = xml.encode()
             dst.writestr(name, data)
     REFERENCE_ODT.write_bytes(dst_buf.getvalue())
@@ -547,7 +584,7 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     print("Building reference styles...")
-    build_reference_odt(running_header)
+    build_reference_odt(book_info["author"], running_header)
 
     print("Assembling manuscript...")
     content = build_document_odt(vault, book_info)
