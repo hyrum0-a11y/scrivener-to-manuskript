@@ -28,32 +28,41 @@ Only parsing (parse_reading_order, parse_book_info, index_vault_files,
 etc.) is shared with obsidian_to_epub.py; both epub and PDF already have
 their own independent renderers, and ODT now does too.
 
-The header lives in the page header itself (no footer), alternating
-left/right pages exactly like the PDF: page number at the outer edge,
-author centered on left (even) pages, book title centered on right (odd)
-pages. This uses ODF's native mirrored-page-style mechanism
-(style:page-usage="mirrored" + a <style:header-left> alongside the normal
-<style:header>) — a completely different, and far more reliable, mechanism
-than the mid-document master-page *switching* described below; confirmed
-via isolated testing to alternate correctly on every page. It appears on
-every page, including the title page and front matter, and the page count
-runs continuously from the title page rather than restarting at the
-manuscript body.
+Three ODF master pages, matching the PDF's own page-type behavior exactly:
+"Standard" (title page + front matter — no header), "PartOpener" (each
+Part's own opening page — no header), and "ChapterBody" (the manuscript
+body proper — every chapter after the first one in its Part, plus every
+chapter's continuation pages — with an alternating left/right header:
+page number at the outer edge, author centered on left/even pages, book
+title centered on right/odd pages; no footer anywhere, the page number
+lives in the header). Back matter switches back to "Standard" (no header)
+at its own first item. The manuscript body's page count restarts at 1 on
+the first Part heading.
 
-A restart-at-1-on-the-manuscript-body attempt IS included (see
-restart_page_numbering()) via the spec-correct ODF technique — a
-mid-document master-page switch — but this is UNVERIFIED: isolated,
-hand-built test files (bypassing this script and pandoc entirely) showed
-LibreOffice's headless PDF export not honoring that switch across four
-different configurations (with/without changing the header, with/without
-also switching master page, targeting an automatic vs. a named style) —
-the page break itself always works, but neither the header nor the page
-count ever changed. Whether this also fails in interactive Writer (as
-opposed to just the headless PDF export path used for all testing here)
-was never established. The visual design was deliberately kept identical
-between "Standard" and "Manuscript" master pages specifically so that if
-the switch silently does nothing (the expectation, per the above), nothing
-looks broken — page numbering just continues instead of restarting.
+Getting the mid-document master-page *switch* working (needed for all of
+the above except the header alternation itself, which is a different,
+always-static ODF mechanism) took real debugging: earlier versions of this
+script put `style:master-page-name` inside `<style:paragraph-properties>`
+on a paragraph style, which LibreOffice silently ignores — confirmed via
+its own UNO scripting API (not just PDF export output) that a style
+written that way doesn't even get *recognized* as a distinct paragraph
+style when the document loads, let alone apply a master-page switch. The
+correct placement is a **direct attribute of `<style:style>` itself**,
+a sibling of `style:family`/`style:parent-style-name`, not a child
+element's property. Every "switching doesn't work" conclusion from earlier
+work on this script was actually this one placement bug, not a genuine
+LibreOffice limitation — see retarget_headings() and patch_master_pages()
+below for the corrected version, and [[obsidian_to_odt_pipeline]] (project
+memory) for the full debugging trail.
+
+Since `custom-style` doesn't apply to ATX headings (confirmed via direct
+testing — see above), the specific headings that need to trigger a switch
+(the first Part, every other Part, each Part's first chapter, back
+matter's first item) are tagged with an explicit pandoc heading id
+(`{#some-id}`) in build_document_odt() — pandoc preserves this verbatim as
+the ODT bookmark name rather than auto-slugifying the heading text, so
+retarget_headings() can find each one reliably by name in the compiled
+output's content.xml, rather than by fragile position-counting.
 
 Requirements:
   - Python 3.10+
@@ -224,6 +233,17 @@ def patch_named_styles(xml: str) -> str:
   <style:paragraph-properties fo:break-before="page" fo:margin="0in" />
   <style:text-properties fo:font-size="1pt" />
 </style:style>
+<!-- Same invisible-marker trick as PageBreak, but also switches back to
+     "Standard" (no header) — used once, for back matter's first item, if
+     that item has no heading of its own to hang the switch on (the hidden
+     bucket — see render_front_back_item_odt()). Safe to declare
+     style:master-page-name here directly since this is a brand-new style
+     name, not one of pandoc's well-known ones that patch_builtin_styles()
+     has to fight with. -->
+<style:style style:name="PageBreakToStandard" style:family="paragraph" style:parent-style-name="Standard" style:master-page-name="Standard">
+  <style:paragraph-properties fo:break-before="page" fo:margin="0in" />
+  <style:text-properties fo:font-size="1pt" />
+</style:style>
 '''
     character_styles = f'''
 <style:style style:name="DropcapLetter" style:family="text">
@@ -235,25 +255,24 @@ def patch_named_styles(xml: str) -> str:
 
 
 def patch_master_pages(xml: str, author: str, running_header: str) -> str:
-    """Give both master pages an alternating left/right header — matching
-    the PDF exactly: page number at the outer edge, author centered on
-    left (even) pages, book title centered on right (odd) pages — and no
-    footer at all. Uses ODF's native mirrored-page-style mechanism
-    (style:page-usage="mirrored" on the page-layout, plus a
-    <style:header-left> alongside the normal <style:header> on the master
-    page) rather than any mid-document switching — confirmed via isolated
-    testing that this alternates correctly and reliably on every page,
-    unlike the mid-document master-page switch in restart_page_numbering()
-    below, which does not reliably do anything.
+    """Define the three master pages: "Standard" (title page + front
+    matter — pandoc's default footer stripped, no header added), a new
+    empty "PartOpener" (each Part's own opening page — no header, same
+    page geometry), and a new "ChapterBody" (the manuscript body — an
+    alternating left/right header, matching the PDF: page number at the
+    outer edge, author centered on left/even pages, book title centered on
+    right/odd pages; no footer). Which master page is actually active on a
+    given page is controlled entirely by retarget_headings() (content.xml,
+    post-pandoc) — this function only *defines* the three; none of them
+    are wired to specific headings here.
 
-    "Standard" is used from the very start (title page, front matter);
-    "Manuscript" is switched to at the first Part heading by
-    restart_page_numbering(), an attempt at restarting the page count
-    there that's unverified — see this module's docstring. The two master
-    pages are deliberately given the IDENTICAL header design: if that
-    switch silently does nothing (the expectation per the docstring), the
-    page just keeps counting (still correctly alternating) instead of
-    restarting, rather than something visibly breaking."""
+    The left/right alternation uses ODF's native mirrored-page-style
+    mechanism (style:page-usage="mirrored" on the page-layout, plus a
+    <style:header-left> alongside the normal <style:header>) — confirmed
+    via isolated testing to work reliably and unconditionally, independent
+    of the mid-document master-page *switching* retarget_headings() does
+    (a different, previously-broken-by-a-placement-bug mechanism — see
+    this module's docstring)."""
     author_text = escape(author.upper())
     title_text = escape(running_header)
 
@@ -293,6 +312,14 @@ def patch_master_pages(xml: str, author: str, running_header: str) -> str:
         1,
     )
 
+    # "Standard" ships with a footer (pandoc's default page-number one) —
+    # drop it; no header is added, since title page/front matter get none.
+    xml = re.sub(
+        r'(<style:master-page style:name="Standard"[^>]*>)\s*<style:footer>.*?</style:footer>\s*(</style:master-page>)',
+        r'\1\2',
+        xml, count=1, flags=re.DOTALL,
+    )
+
     # Right (odd) pages: title centered, page number at the right edge.
     header_right = (
         '<style:header><text:p text:style-name="Header">'
@@ -308,69 +335,108 @@ def patch_master_pages(xml: str, author: str, running_header: str) -> str:
         '</text:p></style:header-left>'
     )
 
-    # "Standard" ships with a footer (pandoc's default page-number one) —
-    # drop it, the page number now lives in the header instead.
-    xml = re.sub(
-        r'(<style:master-page style:name="Standard"[^>]*>)\s*<style:footer>.*?</style:footer>\s*(</style:master-page>)',
-        rf'\1{header_right}{header_left}\2',
-        xml, count=1, flags=re.DOTALL,
-    )
-
-    manuscript_master = (
-        '<style:master-page style:name="Manuscript" style:page-layout-name="Mpm1">'
+    part_opener_master = '<style:master-page style:name="PartOpener" style:page-layout-name="Mpm1" />'
+    chapter_body_master = (
+        '<style:master-page style:name="ChapterBody" style:page-layout-name="Mpm1">'
         f'{header_right}{header_left}'
         '</style:master-page>'
     )
-    xml = xml.replace("</office:master-styles>", manuscript_master + "</office:master-styles>", 1)
+    xml = xml.replace(
+        "</office:master-styles>",
+        part_opener_master + chapter_body_master + "</office:master-styles>",
+        1,
+    )
 
     return xml
 
 
-def restart_page_numbering(content_xml: str) -> str:
-    """UNVERIFIED experimental attempt at restarting the page count to 1 on
-    the manuscript body, switching from "Standard" to "Manuscript" (see
-    patch_master_pages()) via the spec-correct ODF mechanism: a one-off
-    style on the first Part heading with fo:break-before="page" +
-    style:master-page-name="Manuscript" + style:page-number="1". Isolated
-    testing (bypassing this script and pandoc entirely, four different
-    configurations) never got LibreOffice's headless PDF export to honor
-    this — the break itself always works, the master-page switch and the
-    number restart never visibly did. Left in per user request — includes
-    it "just in case" this export-path-specific finding doesn't hold in
-    interactive Writer, which was never tested. If it doesn't work, the
-    identical header design on both master pages (see patch_master_pages())
-    means this is harmless — numbering just continues instead of
-    restarting, nothing looks broken.
+def _heading_switch_style(tag: str) -> tuple[str, str] | None:
+    """Map one of build_document_odt()'s heading-id tags to (new
+    text:style-name, that style's automatic-style XML) — or None if `tag`
+    isn't one of ours (e.g. pandoc's own auto-slugified bookmark name for
+    an untagged heading, which retarget_headings() must leave alone).
+    style:master-page-name is a direct attribute of <style:style> in every
+    case — see this module's docstring for why that placement (not nested
+    inside <style:paragraph-properties>) is the part that actually matters."""
+    if tag == "part-open-first":
+        name = "PartOpenFirst"
+        xml = (
+            f'<style:style style:name="{name}" style:family="paragraph" '
+            'style:parent-style-name="Heading_20_1" style:master-page-name="PartOpener">'
+            '<style:paragraph-properties fo:break-before="page" style:page-number="1" />'
+            '</style:style>'
+        )
+        return name, xml
+    if tag.startswith("part-open-"):
+        name = "PartOpen"
+        xml = (
+            f'<style:style style:name="{name}" style:family="paragraph" '
+            'style:parent-style-name="Heading_20_1" style:master-page-name="PartOpener">'
+            '<style:paragraph-properties fo:break-before="page" />'
+            '</style:style>'
+        )
+        return name, xml
+    if tag.startswith("chapter-open-"):
+        name = "ChapterOpen"
+        xml = (
+            f'<style:style style:name="{name}" style:family="paragraph" '
+            'style:parent-style-name="Heading_20_2" style:master-page-name="ChapterBody">'
+            '<style:paragraph-properties fo:break-before="page" />'
+            '</style:style>'
+        )
+        return name, xml
+    if tag == "backmatter-open":
+        name = "BackMatterOpen"
+        xml = (
+            f'<style:style style:name="{name}" style:family="paragraph" '
+            'style:parent-style-name="Heading_20_2" style:master-page-name="Standard">'
+            '<style:paragraph-properties fo:break-before="page" />'
+            '</style:style>'
+        )
+        return name, xml
+    return None
 
-    Every front-matter item renders with no heading at all (hidden bucket)
-    or an H2 (visible bucket) — see render_front_back_item_odt() — so
-    every Heading_20_1 in the document is a Part heading, and the first one
-    is always the correct target."""
-    matches = list(re.finditer(r'<text:h text:style-name="Heading_20_1"', content_xml))
-    if not matches:
-        return content_xml  # no Part heading found; leave numbering alone
 
-    # Retarget the heading FIRST, using offsets measured against the
-    # as-yet-unmodified string — inserting the automatic style below would
-    # shift every later offset, so doing that first and reusing this span
-    # afterward would slice the wrong (shifted) position.
-    start, end = matches[0].span()
-    content_xml = (
-        content_xml[:start]
-        + '<text:h text:style-name="Heading_20_1_ManuscriptStart"'
-        + content_xml[end:]
-    )
+def retarget_headings(content_xml: str) -> str:
+    """Find every heading build_document_odt() tagged with an explicit id
+    (`# Title {#part-open-first}` etc. — preserved verbatim by pandoc as
+    the ODT bookmark name, since custom-style doesn't apply to headings —
+    see this module's docstring) and retarget it onto the one-off style
+    _heading_switch_style() maps that tag to, switching master page (and,
+    for "part-open-first" specifically, restarting the page count) there.
+    Untagged headings — most chapters, most front/back-matter items — are
+    left completely alone by the regex simply not matching them.
 
-    automatic_style = (
-        '<style:style style:name="Heading_20_1_ManuscriptStart" '
-        'style:family="paragraph" style:parent-style-name="Heading_20_1">'
-        '<style:paragraph-properties fo:break-before="page" '
-        'style:master-page-name="Manuscript" style:page-number="1" />'
-        '</style:style>'
+    A single re.sub() pass handles every match in one go, which matters:
+    an earlier version of this kind of post-processing computed all
+    target offsets up front via a separate finditer() pass and then
+    mutated the string in a loop, which silently corrupted later matches
+    once an earlier replacement changed the string's length. re.sub()'s
+    callback form has no such issue — it never needs the caller to reason
+    about shifting offsets itself."""
+    styles_needed: dict[str, str] = {}
+
+    def repl(m: re.Match) -> str:
+        rest_of_tag, bookmark_tag = m.group(1), m.group(2)
+        result = _heading_switch_style(bookmark_tag)
+        if result is None:
+            return m.group(0)
+        style_name, style_xml = result
+        styles_needed[style_name] = style_xml
+        return f'<text:h text:style-name="{style_name}"{rest_of_tag}><text:bookmark-start text:name="{bookmark_tag}"'
+
+    pattern = re.compile(
+        r'<text:h text:style-name="[^"]*"([^>]*)>\s*'
+        r'<text:bookmark-start text:name="([a-zA-Z0-9-]+)"'
     )
-    return content_xml.replace(
-        "</office:automatic-styles>", automatic_style + "</office:automatic-styles>", 1
-    )
+    content_xml = pattern.sub(repl, content_xml)
+
+    if styles_needed:
+        automatic_styles = "".join(styles_needed.values())
+        content_xml = content_xml.replace(
+            "</office:automatic-styles>", automatic_styles + "</office:automatic-styles>", 1
+        )
+    return content_xml
 
 
 def build_reference_odt(author: str, running_header: str) -> None:
@@ -402,8 +468,9 @@ def patch_output_odt(output: Path) -> None:
     own ODT writer re-injects its default text-properties for those
     well-known style names regardless of what reference.odt already
     customized — see that function's docstring), and content.xml via
-    restart_page_numbering() (the experimental, unverified restart-at-1
-    attempt — see that function's docstring)."""
+    retarget_headings() (the master-page switching that suppresses the
+    header on title/front-matter/Part-opener pages and restarts the page
+    count — see that function's docstring)."""
     src = zipfile.ZipFile(output)
     dst_buf = io.BytesIO()
     with zipfile.ZipFile(dst_buf, "w", zipfile.ZIP_DEFLATED) as dst:
@@ -412,27 +479,31 @@ def patch_output_odt(output: Path) -> None:
             if name == "styles.xml":
                 data = patch_builtin_styles(data.decode()).encode()
             elif name == "content.xml":
-                data = restart_page_numbering(data.decode()).encode()
+                data = retarget_headings(data.decode()).encode()
             dst.writestr(name, data)
     src.close()
     output.write_bytes(dst_buf.getvalue())
 
 
-def render_front_back_item_odt(title: str, body: str) -> list:
+def render_front_back_item_odt(title: str, body: str, heading_id: str = "") -> list:
     """ODT equivalent of obsidian_to_epub.py's render_front_back_item():
     same three buckets (CENTERED_HIDDEN_HEADING_TITLES /
     CENTERED_VISIBLE_HEADING_TITLES / everything else), but a hidden title
     is simply omitted (custom-style doesn't apply to headings, so there's
     no ODT equivalent of CSS's display:none for one) and a visible title
     uses H2 — the same level as chapters, so it gets a matching size for
-    free without needing per-heading styling."""
+    free without needing per-heading styling. `heading_id`, if given, is
+    build_document_odt()'s way of tagging back matter's first (visible-
+    bucket) item so retarget_headings() can find and switch it back to the
+    no-header "Standard" master page — see that function's docstring."""
     prose = render_paragraph_groups(body)
+    id_attr = f" {{#{heading_id}}}" if heading_id else ""
     if title in CENTERED_HIDDEN_HEADING_TITLES:
         return [f'::: {{custom-style="Centered"}}\n{prose}\n:::']
     if title in CENTERED_VISIBLE_HEADING_TITLES:
-        heading = f"## {title}" if title else ""
+        heading = f"## {title}{id_attr}" if title else ""
         return [heading, f'::: {{custom-style="Centered"}}\n{prose}\n:::']
-    heading = f"## {title}" if title else ""
+    heading = f"## {title}{id_attr}" if title else ""
     return [heading, prose]
 
 
@@ -517,18 +588,27 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
             chunks.append(f'::: {{custom-style="PageBreak"}}\n{BLANK_LINE}\n:::')
         chunks.extend(render_front_back_item_odt(fm_title, body))
 
-    for part in parts:
+    # Every Part heading is tagged so retarget_headings() can switch it to
+    # the no-header "PartOpener" master page — the first one additionally
+    # restarts the page count there. Each Part's *first* chapter is tagged
+    # so retarget_headings() can switch it to "ChapterBody" (header on);
+    # later chapters in the same Part are left untagged — nothing switches
+    # master page away from "ChapterBody" for them, so they just continue
+    # using it, which is exactly what's wanted.
+    for part_idx, part in enumerate(parts):
         m = PART_TITLE_RE.match(part.title)
         heading, subtitle_part = (m.group(1).upper(), m.group(2)) if m else (part.title, "")
-        chunks.append(f"# {heading}")
+        part_tag = "part-open-first" if part_idx == 0 else f"part-open-{part_idx}"
+        chunks.append(f"# {heading} {{#{part_tag}}}")
         if subtitle_part:
             chunks.append(f'::: {{custom-style="PartSubtitle"}}\n{subtitle_part}\n:::')
         if part.epigraph:
             poem = "  \n".join(part.epigraph)
             chunks.append(f'::: {{custom-style="Epigraph"}}\n{poem}\n:::')
 
-        for chapter in part.chapters:
-            chunks.append(f"## {chapter.title.upper()}")
+        for chapter_idx, chapter in enumerate(part.chapters):
+            chapter_id_attr = f" {{#chapter-open-{part_idx}}}" if chapter_idx == 0 else ""
+            chunks.append(f"## {chapter.title.upper()}{chapter_id_attr}")
             if chapter.pov:
                 chunks.append(f'::: {{custom-style="POVName"}}\n{chapter.pov}\n:::')
             if chapter.subtitle_lines:
@@ -549,11 +629,22 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
                 if i < len(scenes) - 1:
                     chunks.append('::: {custom-style="Sep"}\n—※—\n:::')
 
-    for fname in back_matter:
+    # Back matter switches back to the no-header "Standard" master page at
+    # its own first item — a hidden-bucket item (no heading — see
+    # render_front_back_item_odt()) uses the invisible PageBreakToStandard
+    # marker instead of a heading-id tag, since custom-style *does* work on
+    # divs. Every later back-matter item is left alone: nothing switches
+    # master page away from "Standard" for them, so they just stay there.
+    for bm_idx, fname in enumerate(back_matter):
         bm_title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
+        is_first = bm_idx == 0
         if bm_title in CENTERED_HIDDEN_HEADING_TITLES:
-            chunks.append(f'::: {{custom-style="PageBreak"}}\n{BLANK_LINE}\n:::')
-        chunks.extend(render_front_back_item_odt(bm_title, body))
+            marker_style = "PageBreakToStandard" if is_first else "PageBreak"
+            chunks.append(f'::: {{custom-style="{marker_style}"}}\n{BLANK_LINE}\n:::')
+            chunks.extend(render_front_back_item_odt(bm_title, body))
+        else:
+            heading_id = "backmatter-open" if is_first else ""
+            chunks.extend(render_front_back_item_odt(bm_title, body, heading_id))
 
     return "\n\n".join(c for c in chunks if c)
 
