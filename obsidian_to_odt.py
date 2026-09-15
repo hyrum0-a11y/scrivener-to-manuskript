@@ -820,6 +820,18 @@ def fix_recto_pages(output: Path, bookmark_prefix: str = "part-open",
     raise RuntimeError(f"fix_recto_pages: didn't converge after {max_iters} passes")
 
 
+def export_pdf_preview(output: Path) -> Path:
+    """Export the compiled .odt as a same-named .pdf next to it, purely for
+    quick viewing (e.g. on a phone) — not a substitute for obsidian_to_pdf.py's
+    dedicated print-quality PDF pipeline."""
+    desktop = _get_desktop()
+    doc = _uno_load(desktop, output)
+    pdf_path = output.with_suffix(".pdf")
+    _uno_export_pdf(doc, pdf_path)
+    doc.close(False)
+    return pdf_path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compile an Obsidian vault into an ODT manuscript (pandoc). "
@@ -882,7 +894,11 @@ def main() -> None:
     print("Forcing Part openers onto right-hand pages (headless LibreOffice pass)...")
     fix_recto_pages(output)
 
+    print("Exporting a PDF preview for quick viewing...")
+    pdf_preview = export_pdf_preview(output)
+
     print(f"Done. Written: {output}")
+    print(f"PDF preview: {pdf_preview}")
 
 
 if __name__ == "__main__":
