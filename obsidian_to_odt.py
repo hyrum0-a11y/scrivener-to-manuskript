@@ -28,17 +28,27 @@ Only parsing (parse_reading_order, parse_book_info, index_vault_files,
 etc.) is shared with obsidian_to_epub.py; both epub and PDF already have
 their own independent renderers, and ODT now does too.
 
-The running header appears on every page, including the title page and
-front matter — unlike the PDF, which hides it there. An earlier version
-tried to match the PDF exactly (front matter uncounted, the manuscript
-body starting a fresh page-1 count) via a mid-document master-page switch,
-the spec-correct ODF technique for this. Confirmed via isolated, hand-built
-test files (bypassing this script and even pandoc entirely) that
-LibreOffice's headless PDF export does not honor that switch — the page
-break happens, but the new page style's header never renders, even in the
-simplest possible reproduction — while a header on the page style active
-from the very start renders correctly every time. See
-patch_master_pages()'s docstring.
+The header lives in the page header itself (page number + book title, no
+footer) — matching where the PDF puts these, though as one consistent
+layout rather than the PDF's alternating left/right page design. It
+appears on every page, including the title page and front matter, and the
+page count runs continuously from the title page rather than restarting at
+the manuscript body.
+
+A restart-at-1-on-the-manuscript-body attempt IS included (see
+restart_page_numbering()) via the spec-correct ODF technique — a
+mid-document master-page switch — but this is UNVERIFIED: isolated,
+hand-built test files (bypassing this script and pandoc entirely) showed
+LibreOffice's headless PDF export not honoring that switch across four
+different configurations (with/without changing the header, with/without
+also switching master page, targeting an automatic vs. a named style) —
+the page break itself always works, but neither the header nor the page
+count ever changed. Whether this also fails in interactive Writer (as
+opposed to just the headless PDF export path used for all testing here)
+was never established. The visual design was deliberately kept identical
+between "Standard" and "Manuscript" master pages specifically so that if
+the switch silently does nothing (the expectation, per the above), nothing
+looks broken — page numbering just continues instead of restarting.
 
 Requirements:
   - Python 3.10+
@@ -140,7 +150,7 @@ def patch_builtin_styles(xml: str) -> str:
     xml = replace_style(
         xml, "Heading_20_2",
         paragraph_props='<style:paragraph-properties fo:text-align="center" fo:margin-top="0.2in" '
-                        'fo:margin-bottom="0.25in" />',
+                        'fo:margin-bottom="0.25in" fo:break-before="page" />',
         text_props=f'<style:text-properties fo:font-family="{HEADING_FONT}" fo:font-weight="bold" '
                    'fo:font-size="16pt" fo:font-style="normal" />',
     )
@@ -173,6 +183,18 @@ def patch_named_styles(xml: str) -> str:
 </style:style>
 <style:style style:name="Noindent" style:family="paragraph" style:parent-style-name="Text_20_body">
   <style:paragraph-properties fo:text-indent="0in" />
+</style:style>
+<!-- fo:line-height as a fixed point value (not a %, which scales with the
+     tallest glyph on the line) stops the 300%-sized DropcapLetter span from
+     inflating the gap to the paragraph's own next wrapped line — confirmed
+     via isolated testing that a percentage/unset line-height visibly
+     double-spaces that one transition. 14pt matches Text_20_body's own
+     (LibreOffice-default, ~12pt) single-line spacing. The now-tight line
+     box is too short to contain the oversized dropcap glyph without
+     colliding with whatever precedes this paragraph (the chapter heading)
+     though, so margin-top makes room for it to extend upward instead. -->
+<style:style style:name="Dropcap" style:family="paragraph" style:parent-style-name="Text_20_body">
+  <style:paragraph-properties fo:text-indent="0in" fo:margin-top="0.3in" fo:line-height="14pt" />
 </style:style>
 <style:style style:name="Sep" style:family="paragraph" style:parent-style-name="Standard">
   <style:paragraph-properties fo:text-align="center" fo:text-indent="0in" fo:margin-top="0.18in" fo:margin-bottom="0.18in" />
@@ -208,28 +230,24 @@ def patch_named_styles(xml: str) -> str:
 
 
 def patch_master_pages(xml: str, running_header: str) -> str:
-    """Add a running header to the "Standard" master page — the only one
-    this document uses, so the header (and pandoc's already-present
-    page-number footer) appear on every page, title page and front matter
-    included.
-
-    An earlier version tried the more refined "front matter uncounted,
-    manuscript body starts fresh at page 1" — a second master page plus a
-    one-off style switching to it partway through the document, the
-    spec-correct ODF technique for a mid-document page-style change. Confirmed
-    via isolated, hand-built test files that LibreOffice's headless PDF
-    export does not honor that switch: the page break happens, but the new
-    master page's header never renders, even in the simplest possible
-    reproduction — while a header on the master page active from the very
-    start (exactly what this function does) renders correctly. Simpler
-    and, unlike the other approach, actually verified working."""
+    """Give both master pages a header — page number, then the running
+    header text at a center tab stop — and no footer at all (matches where
+    the PDF puts these: page number in the header, no footer). "Standard"
+    is used from the very start (title page, front matter); "Manuscript" is
+    switched to at the first Part heading by restart_page_numbering(),
+    an attempt at restarting the page count there that's unverified — see
+    this module's docstring. The two master pages are deliberately given
+    the IDENTICAL header design: if that switch silently does nothing (the
+    expectation per the docstring), the page just keeps counting with the
+    same-looking header, rather than something visibly breaking."""
     header_text = escape(running_header)
 
     header_style = (
         '<style:style style:name="Header" style:family="paragraph" '
         'style:parent-style-name="Standard" style:class="extra">'
-        '<style:paragraph-properties fo:text-align="center" '
-        'style:justify-single-word="false" />'
+        '<style:paragraph-properties fo:text-align="left">'
+        '<style:tab-stops><style:tab-stop style:position="3.25in" style:type="center" /></style:tab-stops>'
+        '</style:paragraph-properties>'
         f'<style:text-properties fo:font-family="{HEADING_FONT}" fo:font-weight="bold" '
         'fo:font-size="8.5pt" fo:letter-spacing="0.02in" />'
         '</style:style>'
@@ -247,12 +265,75 @@ def patch_master_pages(xml: str, running_header: str) -> str:
         1,
     )
 
-    xml = re.sub(
-        r'(<style:master-page style:name="Standard"[^>]*>)',
-        rf'\1<style:header><text:p text:style-name="Header">{header_text}</text:p></style:header>',
-        xml, count=1,
+    header_paragraph = (
+        '<text:p text:style-name="Header">'
+        '<text:page-number text:select-page="current">1</text:page-number>'
+        f'<text:tab/>{header_text}</text:p>'
     )
+
+    # "Standard" ships with a footer (pandoc's default page-number one) —
+    # drop it, the page number now lives in the header instead.
+    xml = re.sub(
+        r'(<style:master-page style:name="Standard"[^>]*>)\s*<style:footer>.*?</style:footer>\s*(</style:master-page>)',
+        rf'\1<style:header>{header_paragraph}</style:header>\2',
+        xml, count=1, flags=re.DOTALL,
+    )
+
+    manuscript_master = (
+        f'<style:master-page style:name="Manuscript" style:page-layout-name="Mpm1">'
+        f'<style:header>{header_paragraph}</style:header>'
+        '</style:master-page>'
+    )
+    xml = xml.replace("</office:master-styles>", manuscript_master + "</office:master-styles>", 1)
+
     return xml
+
+
+def restart_page_numbering(content_xml: str) -> str:
+    """UNVERIFIED experimental attempt at restarting the page count to 1 on
+    the manuscript body, switching from "Standard" to "Manuscript" (see
+    patch_master_pages()) via the spec-correct ODF mechanism: a one-off
+    style on the first Part heading with fo:break-before="page" +
+    style:master-page-name="Manuscript" + style:page-number="1". Isolated
+    testing (bypassing this script and pandoc entirely, four different
+    configurations) never got LibreOffice's headless PDF export to honor
+    this — the break itself always works, the master-page switch and the
+    number restart never visibly did. Left in per user request — includes
+    it "just in case" this export-path-specific finding doesn't hold in
+    interactive Writer, which was never tested. If it doesn't work, the
+    identical header design on both master pages (see patch_master_pages())
+    means this is harmless — numbering just continues instead of
+    restarting, nothing looks broken.
+
+    Every front-matter item renders with no heading at all (hidden bucket)
+    or an H2 (visible bucket) — see render_front_back_item_odt() — so
+    every Heading_20_1 in the document is a Part heading, and the first one
+    is always the correct target."""
+    matches = list(re.finditer(r'<text:h text:style-name="Heading_20_1"', content_xml))
+    if not matches:
+        return content_xml  # no Part heading found; leave numbering alone
+
+    # Retarget the heading FIRST, using offsets measured against the
+    # as-yet-unmodified string — inserting the automatic style below would
+    # shift every later offset, so doing that first and reusing this span
+    # afterward would slice the wrong (shifted) position.
+    start, end = matches[0].span()
+    content_xml = (
+        content_xml[:start]
+        + '<text:h text:style-name="Heading_20_1_ManuscriptStart"'
+        + content_xml[end:]
+    )
+
+    automatic_style = (
+        '<style:style style:name="Heading_20_1_ManuscriptStart" '
+        'style:family="paragraph" style:parent-style-name="Heading_20_1">'
+        '<style:paragraph-properties fo:break-before="page" '
+        'style:master-page-name="Manuscript" style:page-number="1" />'
+        '</style:style>'
+    )
+    return content_xml.replace(
+        "</office:automatic-styles>", automatic_style + "</office:automatic-styles>", 1
+    )
 
 
 def build_reference_odt(running_header: str) -> None:
@@ -279,11 +360,13 @@ def build_reference_odt(running_header: str) -> None:
 
 
 def patch_output_odt(output: Path) -> None:
-    """Rewrite the just-written output.odt's styles.xml in place via
-    patch_builtin_styles() — this has to happen after pandoc runs, since
-    pandoc's own ODT writer re-injects its default text-properties for
-    those well-known style names regardless of what reference.odt already
-    customized (see patch_builtin_styles()'s docstring)."""
+    """Rewrite the just-written output.odt in place: styles.xml via
+    patch_builtin_styles() (has to happen after pandoc runs, since pandoc's
+    own ODT writer re-injects its default text-properties for those
+    well-known style names regardless of what reference.odt already
+    customized — see that function's docstring), and content.xml via
+    restart_page_numbering() (the experimental, unverified restart-at-1
+    attempt — see that function's docstring)."""
     src = zipfile.ZipFile(output)
     dst_buf = io.BytesIO()
     with zipfile.ZipFile(dst_buf, "w", zipfile.ZIP_DEFLATED) as dst:
@@ -291,6 +374,8 @@ def patch_output_odt(output: Path) -> None:
             data = src.read(name)
             if name == "styles.xml":
                 data = patch_builtin_styles(data.decode()).encode()
+            elif name == "content.xml":
+                data = restart_page_numbering(data.decode()).encode()
             dst.writestr(name, data)
     src.close()
     output.write_bytes(dst_buf.getvalue())
@@ -316,14 +401,15 @@ def render_front_back_item_odt(title: str, body: str) -> list:
 
 def inject_dropcap(first_para: str) -> str:
     """Wrap a scene's opening character in a DropcapLetter character-style
-    span (pandoc bracket-span syntax) and the whole paragraph in a
-    text-indent:0 Noindent style — the ODT equivalent of the PDF's raised
-    initial cap."""
+    span (pandoc bracket-span syntax) and the whole paragraph in the
+    Dropcap paragraph style (text-indent:0 plus the fixed line-height/
+    margin-top fix — see that style's comment in patch_named_styles()) —
+    the ODT equivalent of the PDF's raised initial cap."""
     first_para = first_para.strip()
     if not first_para:
         return first_para
     letter, rest = first_para[0], first_para[1:]
-    return f'::: {{custom-style="Noindent"}}\n[{letter}]{{custom-style="DropcapLetter"}}{rest}\n:::'
+    return f'::: {{custom-style="Dropcap"}}\n[{letter}]{{custom-style="DropcapLetter"}}{rest}\n:::'
 
 
 def build_document_odt(vault: Path, book_info: dict) -> str:
@@ -377,15 +463,21 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
             for i in range(1, int(series_length) + 1)
         )
         chunks.append(f'::: {{custom-style="TitleDots"}}\n{dots}\n:::')
-    # Invisible marker paragraph: forces the page break from the title page
-    # into front matter without touching master-page/page-numbering (both
-    # stay on "Standard" — no header, no footer — until the manuscript body).
-    chunks.append(f'::: {{custom-style="PageBreak"}}\n{BLANK_LINE}\n:::')
+    # No marker needed here to break out of the title page: whatever comes
+    # next always forces its own page break already — a hidden-bucket
+    # front-matter item via the per-item PageBreak marker below, a
+    # visible-bucket one or a chapter via Heading_20_2's break-before, or
+    # (front matter empty) a Part via Heading_20_1's break-before.
 
     for fname in front_matter:
         fm_title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
         if fm_title == "Information":
             body = apply_information_overrides(body, book_info)
+        if fm_title in CENTERED_HIDDEN_HEADING_TITLES:
+            # No heading of its own to hang fo:break-before on — see
+            # render_front_back_item_odt() — so force the page break with
+            # an invisible marker paragraph instead.
+            chunks.append(f'::: {{custom-style="PageBreak"}}\n{BLANK_LINE}\n:::')
         chunks.extend(render_front_back_item_odt(fm_title, body))
 
     for part in parts:
@@ -422,6 +514,8 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
 
     for fname in back_matter:
         bm_title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
+        if bm_title in CENTERED_HIDDEN_HEADING_TITLES:
+            chunks.append(f'::: {{custom-style="PageBreak"}}\n{BLANK_LINE}\n:::')
         chunks.extend(render_front_back_item_odt(bm_title, body))
 
     return "\n\n".join(c for c in chunks if c)
