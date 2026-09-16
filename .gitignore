@@ -19,3 +19,6 @@ output/
 # never git-added rather than pattern-matched here, since those predate
 # this file). dashboard/'s config.py hardcodes real personal vault paths.
 dashboard/
+
+# Personal working notes — not project documentation.
+NEXT_STEPS.md
