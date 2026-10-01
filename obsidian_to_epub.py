@@ -35,6 +35,12 @@ Requirements:
 
 Usage:
     python3 obsidian_to_epub.py <vault> [--output-dir DIR]
+    python3 obsidian_to_epub.py <vault> --check
+
+--check is a dry run: it validates Book Info.md and Manuscript Reading
+Order.md, reports reading-order links that point at missing files, unlinked
+vault files, and a missing cover image, then exits without running pandoc or
+writing anything (exit status 1 if any errors were found).
 
 Book-specific settings (title, author, ISBN, publisher, cover, default
 output location) are NOT in this script — they live in a "Book Info.md"
@@ -73,6 +79,7 @@ per-book copy of this file.
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -441,32 +448,70 @@ def render_front_back_item(title: str, body: str) -> list:
     return [heading, prose]
 
 
-def build_document(vault: Path, book_info: dict) -> str:
+def referenced_in_order(front_matter: list, parts: list, back_matter: list) -> list:
+    """Every filename the reading order links to, in reading order, with
+    the section it appears under (for error messages)."""
+    refs = [(f, "Front Matter") for f in front_matter]
+    for part in parts:
+        for chapter in part.chapters:
+            refs.extend((s, f"{part.title} / {chapter.title}") for s in chapter.scenes)
+    refs.extend((f, "Back Matter") for f in back_matter)
+    return refs
+
+
+def resolve_cover(vault: Path, book_info: dict):
+    """Return the cover image Path from Book Info.md (or None if unset)."""
+    cover_str = book_info["cover"]
+    if not cover_str:
+        return None
+    cover = Path(cover_str)
+    if not cover.is_absolute():
+        cover = vault / cover
+    return cover.resolve()
+
+
+def check_vault(vault: Path, book_info: dict) -> int:
+    """Check the reading order against the vault and report problems.
+    Returns the number of errors (missing linked files); orphans and a
+    missing cover are warnings only."""
     reading_order_path = vault / "Manuscript Reading Order.md"
     if not reading_order_path.is_file():
         sys.exit(f"ERROR: {reading_order_path} not found — it defines the compile order.")
 
     front_matter, parts, back_matter = parse_reading_order(reading_order_path)
     file_index = index_vault_files(vault)
+    refs = referenced_in_order(front_matter, parts, back_matter)
 
-    referenced = set(front_matter) | set(back_matter)
-    for part in parts:
-        for chapter in part.chapters:
-            referenced.update(chapter.scenes)
+    missing = [(f, where) for f, where in refs if f not in file_index]
+    if missing:
+        print("ERROR: Manuscript Reading Order.md links to these notes, but no "
+              "matching file exists under Front Matter/, Manuscript/ or Back Matter/:")
+        for fname, where in missing:
+            print(f"  - [[{fname}]]  (under {where})")
+        print("  Fix the link spelling, or create/rename the note to match.")
 
-    orphans = find_orphaned_files(file_index, referenced)
+    orphans = find_orphaned_files(file_index, {f for f, _ in refs})
     if orphans:
         print("WARNING: these vault files have content but aren't referenced in "
               "Manuscript Reading Order.md, so they will NOT be in the compiled book:")
         for p in sorted(orphans, key=lambda p: str(p.relative_to(vault))):
             print(f"  - {p.relative_to(vault)}")
 
+    cover = resolve_cover(vault, book_info)
+    if cover and not cover.is_file():
+        print(f"WARNING: cover image '{book_info['cover']}' from Book Info.md was not "
+              f"found ({cover}); the epub will have no cover.")
+
+    return len(missing)
+
+
+def build_document(vault: Path, book_info: dict) -> str:
+    reading_order_path = vault / "Manuscript Reading Order.md"
+    front_matter, parts, back_matter = parse_reading_order(reading_order_path)
+    file_index = index_vault_files(vault)
+
     def resolve(fname: str) -> Path:
-        p = file_index.get(fname)
-        if p is None:
-            sys.exit(f"ERROR: '{fname}' is referenced in Manuscript Reading Order.md "
-                      f"but no matching file was found in the vault.")
-        return p
+        return file_index[fname]  # check_vault() has already verified every link
 
     chunks = []
 
@@ -533,6 +578,9 @@ def main() -> None:
                     "Book metadata is read from <vault>/Book Info.md — see this file's module docstring.")
     parser.add_argument("vault", help="path to the Obsidian vault to compile")
     parser.add_argument("--output-dir", help="override the vault's Book Info.md output_dir for this run")
+    parser.add_argument("--check", action="store_true",
+                        help="dry run: validate Book Info.md and the reading order, "
+                             "report problems, and exit without building")
     args = parser.parse_args()
 
     vault = Path(args.vault).expanduser().resolve()
@@ -540,6 +588,27 @@ def main() -> None:
         sys.exit(f"ERROR: {vault} does not look like a vault (no Manuscript/ folder)")
 
     book_info = parse_book_info(vault)
+    errors = check_vault(vault, book_info)
+
+    if args.check:
+        if shutil.which("pandoc") is None:
+            print("WARNING: pandoc is not installed, so a real build would fail. "
+                  "Install it from https://pandoc.org/installing.html")
+        if errors:
+            sys.exit(f"Check failed: {errors} broken link(s) in Manuscript Reading Order.md.")
+        build_document(vault, book_info)  # exercises the renderer without pandoc
+        print("Check passed: the vault is ready to compile.")
+        return
+
+    if errors:
+        sys.exit(f"Not building: fix the {errors} broken link(s) above first "
+                 f"(run with --check to re-test without building).")
+
+    if shutil.which("pandoc") is None:
+        sys.exit("ERROR: pandoc is not installed (or not on your PATH). It does the actual "
+                 "epub conversion.\n  Install it from https://pandoc.org/installing.html, "
+                 "then run this again.")
+
     title, author = book_info["title"], book_info["author"]
     author_file_as, publisher, isbn = book_info["author_file_as"], book_info["publisher"], book_info["isbn"]
 
@@ -586,13 +655,7 @@ def main() -> None:
         "--epub-chapter-level=2",
         "--css", str(CSS),
     ]
-    cover_str = book_info["cover"]
-    cover = None
-    if cover_str:
-        cover = Path(cover_str)
-        if not cover.is_absolute():
-            cover = vault / cover
-        cover = cover.resolve()
+    cover = resolve_cover(vault, book_info)
     if cover and cover.is_file():
         cmd += ["--epub-cover-image", str(cover)]
 
