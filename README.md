@@ -169,7 +169,9 @@ glyphs).
 **`obsidian_to_epub.py`** — compiles a vault into a distributable `.epub` via pandoc.
 ```
 python3 obsidian_to_epub.py <vault> [--output-dir DIR]
+python3 obsidian_to_epub.py <vault> --check
 ```
+`--check` is a dry run: it reports reading-order links to missing notes, notes left out of the reading order, and a missing cover image, without needing pandoc or writing anything. A normal build runs the same checks first and stops on broken links. A GitHub Actions smoke test builds `vault-template/` on every PR and validates it with EPUBCheck.
 
 **`obsidian_to_pdf.py`** — compiles the same vault into a print-style PDF via WeasyPrint (CSS Paged Media: page size, running headers, a page-numbered Contents page). Requires `weasyprint` and `pymupdf`.
 ```

@@ -1,0 +1,50 @@
+name: EPUB smoke test
+
+# Builds vault-template/ into an EPUB and validates it with EPUBCheck, so a
+# change that breaks the compile (or produces an invalid EPUB) shows up on
+# the PR instead of on a reader.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  epub:
+    runs-on: ubuntu-latest
+    env:
+      EPUBCHECK_VERSION: "5.1.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Install EPUBCheck
+        run: |
+          curl -sSL -o epubcheck.zip \
+            "https://github.com/w3c/epubcheck/releases/download/v${EPUBCHECK_VERSION}/epubcheck-${EPUBCHECK_VERSION}.zip"
+          unzip -q epubcheck.zip -d "$RUNNER_TEMP"
+
+      - name: Dry-run check of the template vault
+        run: python3 obsidian_to_epub.py vault-template --check
+
+      - name: Build the template vault to EPUB
+        run: python3 obsidian_to_epub.py vault-template --output-dir build
+
+      - name: Validate with EPUBCheck
+        run: java -jar "$RUNNER_TEMP/epubcheck-${EPUBCHECK_VERSION}/epubcheck.jar" build/*.epub
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: template-epub
+          path: build/*.epub
