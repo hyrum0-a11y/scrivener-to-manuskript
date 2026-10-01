@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "obsidian-book"
+version = "0.1.0"
+description = "Compile an Obsidian book vault to EPUB, PDF or ODT"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = []  # epub/check only need pandoc on PATH
+
+[project.optional-dependencies]
+pdf = ["weasyprint", "pymupdf"]
+odt = ["pymupdf"]  # plus a native LibreOffice install for the uno module
+
+[project.scripts]
+obsidian-book = "obsidian_book.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hyrum0-a11y/scrivener-to-manuskript"
+
+[tool.setuptools]
+packages = ["obsidian_book"]
+
+[tool.setuptools.package-data]
+obsidian_book = ["epub_style.css"]

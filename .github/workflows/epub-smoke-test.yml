@@ -44,6 +44,18 @@ jobs:
       - name: Validate with EPUBCheck
         run: java -jar "$RUNNER_TEMP/epubcheck-${EPUBCHECK_VERSION}/epubcheck.jar" build/*.epub
 
+      # Same build through the pip-installed `obsidian-book` command, so a
+      # packaging break (missing CSS, bad entry point) shows up too.
+      - name: Install the package
+        run: pip install .
+
+      - name: Check and build via obsidian-book
+        working-directory: ${{ runner.temp }}
+        run: |
+          obsidian-book check "$GITHUB_WORKSPACE/vault-template"
+          obsidian-book epub "$GITHUB_WORKSPACE/vault-template" --output-dir cli-build
+          java -jar "$RUNNER_TEMP/epubcheck-${EPUBCHECK_VERSION}/epubcheck.jar" cli-build/*.epub
+
       - uses: actions/upload-artifact@v4
         with:
           name: template-epub

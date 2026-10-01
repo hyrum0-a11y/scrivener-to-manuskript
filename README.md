@@ -164,6 +164,29 @@ module docstring for the full list (title-page subtitle/layout, a
 series-position dot row, page trim size, running headers, per-POV "sign"
 glyphs).
 
+### Install: one command for every format
+
+```
+pip install git+https://github.com/hyrum0-a11y/scrivener-to-manuskript   # or `pip install .` from a clone
+pip install "obsidian-book[pdf] @ git+https://github.com/hyrum0-a11y/scrivener-to-manuskript"  # adds PDF support
+```
+
+Then:
+
+```
+obsidian-book check <vault>                    # dry run (same as --check below)
+obsidian-book epub  <vault> [--output-dir DIR]
+obsidian-book pdf   <vault> [--output-dir DIR] # needs the [pdf] extras
+obsidian-book odt   <vault> [--output-dir DIR] # needs LibreOffice + pymupdf
+```
+
+pandoc still has to be installed separately (see Requirements). The code
+lives in the `obsidian_book/` package; the `obsidian_to_*.py` scripts below
+still work from a clone and do exactly the same thing. Other Python code
+can call `obsidian_book.build_epub(vault, output_dir=...)`, which returns the
+written path and raises `obsidian_book.BookError` with an author-readable
+message instead of exiting.
+
 ### Scripts
 
 **`obsidian_to_epub.py`** — compiles a vault into a distributable `.epub` via pandoc.
@@ -188,7 +211,7 @@ python3 obsidian_to_odt.py <vault> [--output-dir DIR]
 python3 epub_to_obsidian.py NOVEL.epub [--title "My Novel"] [--author "Your Name"] [--output ./output]
 ```
 
-**`epub_style.css`** — the stylesheet `obsidian_to_epub.py` compiles with (`obsidian_to_pdf.py` uses its own equivalent CSS inline, tuned for print). Covers drop caps, POV/chapter-date header lines, part epigraphs, scene separators, and front/back-matter styling.
+**`obsidian_book/epub_style.css`** — the stylesheet `obsidian_to_epub.py` compiles with (`obsidian_to_pdf.py` uses its own equivalent CSS inline, tuned for print). Covers drop caps, POV/chapter-date header lines, part epigraphs, scene separators, and front/back-matter styling.
 
 ---
 

@@ -22,3 +22,8 @@ dashboard/
 
 # Personal working notes — not project documentation.
 NEXT_STEPS.md
+
+# Packaging build output
+build/
+dist/
+*.egg-info/
