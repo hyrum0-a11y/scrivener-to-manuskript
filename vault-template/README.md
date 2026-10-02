@@ -15,6 +15,9 @@ book), so you can confirm your setup works before writing anything.
 3. Edit `Manuscript Reading Order.md`, replace the example Part/Chapter,
    and add your own scene files under `Manuscript/` (referenced there by
    filename, wherever you put them).
+   Book not divided into parts? Delete the `# Part ...` heading (and its
+   epigraph) and list your `## Chapter` headings directly; the book then
+   has no Part page and the Contents lists chapters instead.
 4. Replace the placeholder text in `Front Matter/Information.md`,
    `Front Matter/Acknowledgments.md`, and `Back Matter/About the Author.md`
    — or delete the bullets referencing them from the Reading Order note if

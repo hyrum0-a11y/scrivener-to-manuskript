@@ -48,6 +48,11 @@ def available_formats() -> list:
 def tool_groups() -> list:
     convert = lambda fmt: url_for("convert_form", fmt=fmt)
     return [
+        {"title": "Start here", "tools": [
+            {"name": "Starter vault", "href": url_for("starter_vault"), "badge": "Download",
+             "desc": "A ready-made Obsidian vault set up for these tools. Unzip it, open it in "
+                     "Obsidian and start writing."},
+        ]},
         {"title": "Publish your book", "tools": [
             {"name": "Obsidian → EPUB", "href": convert("epub"),
              "desc": "Turn your Obsidian book vault into an e-book for Kindle, Apple Books, Kobo and other readers."},

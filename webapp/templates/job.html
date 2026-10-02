@@ -19,7 +19,7 @@
       <h1>{{ st.book.title }}</h1>
       <p class="author">by {{ st.book.author }}</p>
       <p class="muted stats">
-        {{ st.book.parts }} part{{ '' if st.book.parts == 1 else 's' }} ·
+        {% if st.book.parts %}{{ st.book.parts }} part{{ '' if st.book.parts == 1 else 's' }} ·{% endif %}
         {{ st.book.chapters }} chapter{{ '' if st.book.chapters == 1 else 's' }} ·
         {{ st.book.scenes }} scene{{ '' if st.book.scenes == 1 else 's' }} ·
         {{ '{:,}'.format(st.book.words) }} words

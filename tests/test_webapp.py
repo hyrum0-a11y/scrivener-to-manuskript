@@ -114,6 +114,44 @@ def test_untrusted_build_drops_server_files(tmp_path):
         assert "EPUB/media/cover.png" in names
 
 
+def make_partless_vault(tmp_path):
+    """The template with its Part heading removed: chapters sit directly
+    under the book, as in a novel with no part divisions."""
+    v = make_vault(tmp_path)
+    order = v / "Manuscript Reading Order.md"
+    text = order.read_text()
+    start = text.index("# Part")
+    order.write_text(text[:start] + text[text.index("## ", start):])
+    return v
+
+
+def test_reading_order_without_parts_keeps_chapters(tmp_path):
+    from obsidian_book.epub import parse_reading_order
+    _, parts, _ = parse_reading_order(make_partless_vault(tmp_path) / "Manuscript Reading Order.md")
+    assert len(parts) == 1 and parts[0].implicit
+    assert [c.title for c in parts[0].chapters] == ["1. Example Chapter Title"]
+    assert parts[0].chapters[0].scenes == ["01 - Opening Scene"]
+
+
+@needs_pandoc
+def test_epub_without_parts_has_no_part_page(tmp_path):
+    epub = build_epub(make_partless_vault(tmp_path), tmp_path / "out", untrusted=True)
+    with zipfile.ZipFile(epub) as zf:
+        nav = zf.read("EPUB/nav.xhtml").decode()
+        text = b"".join(zf.read(n) for n in zf.namelist() if n.endswith(".xhtml")).decode()
+    assert "1. EXAMPLE CHAPTER TITLE" in nav
+    assert "PART I" not in text and "Opening Scene" not in nav
+
+
+@needs_pdf
+def test_pdf_without_parts_lists_chapters(tmp_path):
+    import pymupdf
+    from obsidian_book.pdf import build_pdf
+    pdf = build_pdf(make_partless_vault(tmp_path), tmp_path / "out", untrusted=True)
+    text = "".join(page.get_text() for page in pymupdf.open(pdf))
+    assert "1. EXAMPLE CHAPTER TITLE—1" in text and "PART I" not in text
+
+
 # --- app end to end -------------------------------------------------------------
 
 @pytest.fixture
@@ -144,7 +182,7 @@ def folder_parts(d: Path, prefix: str = "My Book") -> list:
 
 def test_home_lists_all_tools_in_groups(client):
     page = client.get("/").get_data(as_text=True)
-    for name in ("Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Markdown", "EPUB → Obsidian",
+    for name in ("Starter vault", 'href="/starter-vault.zip"', "Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Markdown", "EPUB → Obsidian",
                  "Publish your book", "Bring your work in", "Pick your vault"):
         assert name in page
     assert page.count("Coming soon") == (3 if pdf_available() else 4)

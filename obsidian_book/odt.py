@@ -645,7 +645,10 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
         m = PART_TITLE_RE.match(part.title)
         heading, subtitle_part = (m.group(1).upper(), m.group(2)) if m else (part.title, "")
         part_tag = "part-open-first" if part_idx == 0 else f"part-open-{part_idx}"
-        chunks.append(f"# {heading} {{#{part_tag}}}")
+        # A book with no Part headings gets no Part page (so its body page
+        # count doesn't restart at 1 — not handled for ODT yet).
+        if not part.implicit:
+            chunks.append(f"# {heading} {{#{part_tag}}}")
         if subtitle_part:
             chunks.append(f'::: {{custom-style="PartSubtitle"}}\n{subtitle_part}\n:::')
         if part.epigraph:

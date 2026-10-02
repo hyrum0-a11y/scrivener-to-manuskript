@@ -19,6 +19,10 @@ backbone:
     - [[scene-file]]
     - [[file|Title]]  _Back Matter_       (after the last chapter)
 
+The Part heading is optional: a book that isn't divided into parts just
+leaves it out, and chapters listed before any Part heading compile straight
+under the book with no Part page.
+
 Each scene file is located by filename anywhere under the vault (Front
 Matter/, Manuscript/, Back Matter/) — its folder path is irrelevant to
 ordering, only the note's bullet order matters.
@@ -160,6 +164,9 @@ class Part:
     title: str
     epigraph: list = field(default_factory=list)
     chapters: list = field(default_factory=list)
+    # True for the stand-in Part holding chapters listed before any Part
+    # heading (a book with no part divisions): it gets no Part page.
+    implicit: bool = False
 
 
 def strip_frontmatter(text: str) -> tuple[str, str]:
@@ -330,8 +337,10 @@ def parse_reading_order(path: Path):
 
         if stripped.startswith("## "):
             current_chapter = Chapter(title=stripped[3:].strip())
-            if current_part is not None:
-                current_part.chapters.append(current_chapter)
+            if current_part is None:
+                current_part = Part(title="", implicit=True)
+                parts.append(current_part)
+            current_part.chapters.append(current_chapter)
             i += 1
             header_lines = []
             while i < n:
@@ -462,7 +471,8 @@ def referenced_in_order(front_matter: list, parts: list, back_matter: list) -> l
     refs = [(f, "Front Matter") for f in front_matter]
     for part in parts:
         for chapter in part.chapters:
-            refs.extend((s, f"{part.title} / {chapter.title}") for s in chapter.scenes)
+            where = chapter.title if part.implicit else f"{part.title} / {chapter.title}"
+            refs.extend((s, where) for s in chapter.scenes)
     refs.extend((f, "Back Matter") for f in back_matter)
     return refs
 
@@ -532,7 +542,8 @@ def build_document(vault: Path, book_info: dict) -> str:
     for part in parts:
         m = PART_TITLE_RE.match(part.title)
         heading, subtitle = (m.group(1).upper(), m.group(2)) if m else (part.title, "")
-        chunks.append(f"# {heading}")
+        if not part.implicit:
+            chunks.append(f"# {heading}")
         if subtitle:
             chunks.append(BLANK_LINE)
             chunks.append(BLANK_LINE)
@@ -664,6 +675,10 @@ def build_epub(vault, output_dir=None, *, untrusted: bool = False) -> Path:
 
     print("Assembling manuscript...")
     content = build_document(vault, book_info)
+    # Contents normally lists Parts only; chapters outside any Part (a book
+    # with no part divisions) need the chapter level in it too.
+    _, parts, _ = parse_reading_order(vault / "Manuscript Reading Order.md")
+    toc_depth = 2 if any(p.implicit for p in parts) else 1
 
     # Supplying title/author via --epub-metadata (raw Dublin Core XML) instead
     # of --metadata avoids pandoc auto-generating a visible, page-turnable
@@ -694,7 +709,7 @@ def build_epub(vault, output_dir=None, *, untrusted: bool = False) -> Path:
             "-o", str(output),
             f"--epub-metadata={meta_path}",
             "--metadata", "toc-title=Contents",
-            "--toc", "--toc-depth=1",
+            "--toc", f"--toc-depth={toc_depth}",
             "--epub-chapter-level=2",
             "--css", str(CSS),
         ]

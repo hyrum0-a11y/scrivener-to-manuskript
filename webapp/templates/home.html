@@ -20,7 +20,7 @@
     <a href="{{ t.href }}">
       <h3>{{ t.name }}</h3>
       <p>{{ t.desc }}</p>
-      <span class="badge">Open</span>
+      <span class="badge">{{ t.badge or 'Open' }}</span>
     </a>
     {% else %}
     <div>

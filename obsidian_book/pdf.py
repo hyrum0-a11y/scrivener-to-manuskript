@@ -54,14 +54,14 @@ import argparse
 import html
 import re
 import sys
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 import pymupdf as fitz
 import weasyprint
 
-from obsidian_book.epub import BookError, load_vault, resolve_output_dir, safe_filename
+from obsidian_book.epub import (BookError, load_vault, parse_reading_order, resolve_output_dir,
+                                safe_filename)
 
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
 ISBN_EBOOK_RE = re.compile(r'^(ISBN \(eBook\):\s*).*$', re.MULTILINE)
@@ -89,21 +89,6 @@ CORRESPONDENCE_RE = re.compile(
 
 CENTERED_HIDDEN_HEADING_TITLES = {"Information", "Acknowledgments"}
 CENTERED_VISIBLE_HEADING_TITLES = {"About the Author", "Continue Reading"}
-
-
-@dataclass
-class Chapter:
-    title: str
-    pov: str = ""
-    subtitle_lines: list = field(default_factory=list)
-    scenes: list = field(default_factory=list)
-
-
-@dataclass
-class Part:
-    title: str
-    epigraph: list = field(default_factory=list)
-    chapters: list = field(default_factory=list)
 
 
 def strip_frontmatter(text: str) -> tuple[str, str]:
@@ -227,89 +212,6 @@ def md_inline_to_html(text: str) -> str:
     escaped = re.sub(r"\*(.+?)\*", r"<em>\1</em>", escaped)
     escaped = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', escaped)
     return escaped
-
-
-def parse_reading_order(path: Path):
-    lines = path.read_text(encoding="utf-8").splitlines()
-    front_matter: list[str] = []
-    back_matter: list[str] = []
-    parts: list[Part] = []
-
-    current_part = None
-    current_chapter = None
-    past_title = False
-
-    i, n = 0, len(lines)
-    while i < n:
-        stripped = lines[i].strip()
-
-        if not stripped:
-            i += 1
-            continue
-
-        fm_m = FM_BULLET_RE.match(stripped)
-        if fm_m:
-            fname, section = fm_m.group(1), fm_m.group(2)
-            if section == "Front Matter":
-                front_matter.append(fname)
-            elif section == "Back Matter":
-                back_matter.append(fname)
-            i += 1
-            continue
-
-        if stripped.startswith("## "):
-            current_chapter = Chapter(title=stripped[3:].strip())
-            if current_part is not None:
-                current_part.chapters.append(current_chapter)
-            i += 1
-            header_lines = []
-            while i < n:
-                s2 = lines[i].strip()
-                if not s2:
-                    i += 1
-                    continue
-                if s2.startswith("#") or SCENE_BULLET_RE.match(s2) or FM_BULLET_RE.match(s2):
-                    break
-                header_lines.append(s2)
-                i += 1
-            if header_lines:
-                current_chapter.pov = header_lines[0]
-            current_chapter.subtitle_lines = header_lines[1:]
-            continue
-
-        if stripped.startswith("# "):
-            if not past_title:
-                past_title = True
-                i += 1
-                continue
-            current_part = Part(title=stripped[2:].strip())
-            parts.append(current_part)
-            current_chapter = None
-            i += 1
-            epigraph_lines = []
-            while i < n:
-                st2 = lines[i].strip()
-                if not st2:
-                    i += 1
-                    continue
-                if st2.startswith(">"):
-                    epigraph_lines.append(st2[1:].strip())
-                    i += 1
-                    continue
-                break
-            current_part.epigraph = epigraph_lines
-            continue
-
-        scene_m = SCENE_BULLET_RE.match(stripped)
-        if scene_m:
-            if current_chapter is not None:
-                current_chapter.scenes.append(scene_m.group(1))
-            i += 1
-            continue
-
-        i += 1
-
-    return front_matter, parts, back_matter
 
 
 def index_vault_files(vault: Path) -> dict:
@@ -528,8 +430,20 @@ def build_html(vault: Path, book_info: dict) -> tuple:
         sections.append(render_front_back_item(title, body))
 
     # Contents page — lists Parts only, with page numbers via target-counter()
+    # A stand-in Part (chapters outside any Part heading) lists its chapters
+    # instead.
     toc_items = []
+    chapter_idx_global = 0
     for idx, part in enumerate(parts, start=1):
+        if part.implicit:
+            for chapter in part.chapters:
+                toc_items.append(
+                    f'<p class="toc-entry"><a href="#chapter-{chapter_idx_global}">'
+                    f'{html.escape(chapter.title.upper())}</a></p>'
+                )
+                chapter_idx_global += 1
+            continue
+        chapter_idx_global += len(part.chapters)
         m = PART_TITLE_RE.match(part.title)
         roman = m.group(1).split()[-1] if m else str(idx)
         subtitle = m.group(2) if m else part.title
@@ -554,6 +468,7 @@ def build_html(vault: Path, book_info: dict) -> tuple:
     # actual page number, then post-process the PDF) — left as a possible
     # follow-up rather than blocking on it now.
 
+    chapter_idx_global = 0
     for idx, part in enumerate(parts, start=1):
         m = PART_TITLE_RE.match(part.title)
         heading, subtitle = (m.group(1).upper(), m.group(2)) if m else (part.title, "")
@@ -563,20 +478,27 @@ def build_html(vault: Path, book_info: dict) -> tuple:
             lines = "<br/>".join(md_inline_to_html(l) for l in part.epigraph)
             epigraph_html = f'<p class="epigraph">{lines}</p>'
         # Part I resets the visible page counter to 1 — see the CSS ".partone"
-        # comment for why it needs a page name distinct from other Parts.
+        # comment for why it needs a page name distinct from other Parts. A
+        # book with no Part headings has no Part page, so its first chapter
+        # page takes over that job.
         part_page_class = "partone" if idx == 1 else "noheader"
-        sections.append(
-            f'<section class="part-page {part_page_class} recto" id="{anchor}">'
-            f'<h1 class="part-heading">{html.escape(heading)}</h1>'
-            f'<p class="part-subtitle">{html.escape(subtitle)}</p>'
-            f"{epigraph_html}</section>"
-        )
+        if not part.implicit:
+            sections.append(
+                f'<section class="part-page {part_page_class} recto" id="{anchor}">'
+                f'<h1 class="part-heading">{html.escape(heading)}</h1>'
+                f'<p class="part-subtitle">{html.escape(subtitle)}</p>'
+                f"{epigraph_html}</section>"
+            )
 
         for chapter_idx, chapter in enumerate(part.chapters):
             # The first chapter of a part also gets forced onto a fresh
             # right-hand page (like the part-opener itself) — matches the
             # reference's blank page between the Part page and Chapter One.
             recto_class = " recto" if chapter_idx == 0 else ""
+            if part.implicit and idx == 1 and chapter_idx == 0:
+                recto_class += " partone"
+            chapter_anchor = f"chapter-{chapter_idx_global}"
+            chapter_idx_global += 1
             chapter_titles.append(chapter.title.upper())
 
             sign_html = ""
@@ -595,7 +517,7 @@ def build_html(vault: Path, book_info: dict) -> tuple:
                     scenes_html.append('<p class="sep">—※—</p>')
 
             sections.append(
-                f'<section class="chapter-page{recto_class}">'
+                f'<section class="chapter-page{recto_class}" id="{chapter_anchor}">'
                 f'<h2 class="chapter-heading">{html.escape(chapter.title.upper())}</h2>'
                 f"{pov_html}{sign_html}{date_html}"
                 f'<div class="prose">{"".join(scenes_html)}</div></section>'

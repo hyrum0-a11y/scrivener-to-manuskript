@@ -57,7 +57,7 @@ def book_details(vault: Path, book_info: dict) -> dict:
     words = sum(len(strip_frontmatter(files[s].read_text(encoding="utf-8"))[1].split())
                 for s in scenes if s in files)
     return {"title": book_info["title"], "author": book_info["author"],
-            "parts": len(parts), "chapters": sum(len(p.chapters) for p in parts),
+            "parts": sum(not p.implicit for p in parts), "chapters": sum(len(p.chapters) for p in parts),
             "scenes": len(scenes), "words": words}
 
 
