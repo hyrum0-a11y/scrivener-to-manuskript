@@ -26,3 +26,7 @@ packages = ["obsidian_book"]
 
 [tool.setuptools.package-data]
 obsidian_book = ["epub_style.css", "untrusted.lua"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

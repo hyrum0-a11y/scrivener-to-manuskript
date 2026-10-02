@@ -62,7 +62,7 @@ jobs:
         run: |
           sudo apt-get install -y fonts-ebgaramond fonts-linuxlibertine libpango-1.0-0 libpangoft2-1.0-0
           pip install -r webapp/requirements.txt pytest
-          pytest -q tests
+          python -m pytest -q tests
 
       - uses: actions/upload-artifact@v4
         with:

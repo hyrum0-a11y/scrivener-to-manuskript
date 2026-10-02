@@ -231,7 +231,7 @@ zip-slip and size checks, and are built with `build_epub(untrusted=True)`.
 ```
 pip install -r webapp/requirements.txt
 flask --app 'webapp.app:create_app()' run      # http://127.0.0.1:5000
-pytest -q tests                                # needs pandoc for the build tests
+python -m pytest -q tests                      # needs pandoc for the build tests
 ```
 
 Server setup: [deploy/DEPLOY.md](deploy/DEPLOY.md).
