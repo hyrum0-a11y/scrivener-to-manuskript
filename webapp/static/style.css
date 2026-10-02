@@ -62,7 +62,6 @@ button:disabled { opacity: .6; cursor: wait; }
 [hidden] { display: none !important; }
 
 .lead { font-size: 1.1rem; color: var(--muted); margin-top: 0; }
-.intro .button { margin-top: .4em; }
 h2.group { margin-top: 2em; font-family: Georgia, "Times New Roman", serif; font-size: 1.3rem; font-weight: 600; }
 
 .steps { list-style: none; counter-reset: step; padding: 0; margin: 2em 0 .5em; display: grid; gap: 12px;
