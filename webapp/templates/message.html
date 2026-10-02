@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Author Tools{% endblock %}
+{% block main %}
+<h1>{{ title }}</h1>
+<p>{{ text }}</p>
+<p><a href="{{ url_for('home') }}">Back to all tools</a></p>
+{% endblock %}

@@ -218,3 +218,20 @@ python3 epub_to_obsidian.py NOVEL.epub [--title "My Novel"] [--author "Your Name
 ## License
 
 MIT
+
+---
+
+## Web tool (authortools.hyrumjones.com)
+
+`webapp/` is a small Flask site that lists every tool and runs the
+Obsidian → EPUB conversion on an uploaded, zipped vault (the other tools
+show as "coming soon"). Uploads go through a job queue, are unzipped with
+zip-slip and size checks, and are built with `build_epub(untrusted=True)`.
+
+```
+pip install -r webapp/requirements.txt
+flask --app 'webapp.app:create_app()' run      # http://127.0.0.1:5000
+pytest -q tests                                # needs pandoc for the build tests
+```
+
+Server setup: [deploy/DEPLOY.md](deploy/DEPLOY.md).

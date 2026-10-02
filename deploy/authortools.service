@@ -1,0 +1,41 @@
+# systemd unit for authortools.hyrumjones.com. Install: see deploy/DEPLOY.md.
+[Unit]
+Description=Author Tools web app (authortools.hyrumjones.com)
+After=network.target
+
+[Service]
+User=authortools
+Group=authortools
+WorkingDirectory=/opt/authortools/app
+Environment=AUTHORTOOLS_DATA_DIR=/var/lib/authortools
+Environment=AUTHORTOOLS_MAX_UPLOAD_MB=50
+Environment=AUTHORTOOLS_WORKERS=1
+# One process only: the job queue lives in memory. Threads serve pages
+# while a conversion runs.
+ExecStart=/opt/authortools/venv/bin/gunicorn --workers 1 --threads 8 \
+    --bind 127.0.0.1:8300 --timeout 60 'webapp.app:create_app()'
+Restart=on-failure
+
+# Hardening: conversions run untrusted uploads.
+StateDirectory=authortools
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/authortools
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# Only the local reverse proxy may talk to it; pandoc can't reach the network.
+IPAddressAllow=localhost
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=1G
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

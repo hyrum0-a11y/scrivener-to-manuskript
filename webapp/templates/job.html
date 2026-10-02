@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Your EPUB · Author Tools{% endblock %}
+{% block head %}{% if st.state in ('queued', 'running') %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block main %}
+<p class="back"><a href="{{ url_for('epub_form') }}">← Convert another</a></p>
+{% if st.state == 'queued' %}
+  <h1>Waiting in line…</h1>
+  <p>{% if position > 1 %}{{ position - 1 }} book(s) ahead of yours. {% endif %}This page updates by itself.</p>
+{% elif st.state == 'running' %}
+  <h1>Building your EPUB…</h1>
+  <p>This usually takes a few seconds. This page updates by itself.</p>
+{% elif st.state == 'done' %}
+  <h1>Your EPUB is ready</h1>
+  <p><a class="button" href="{{ url_for('job_download', job_id=job_id) }}">Download {{ st.file }}</a></p>
+  <p class="muted">The file is deleted from the server after {{ keep_minutes }} minutes.</p>
+{% else %}
+  <h1>That didn't work</h1>
+  <pre class="error">{{ st.error }}</pre>
+  <p><a href="{{ url_for('epub_form') }}">Fix the vault and try again</a></p>
+{% endif %}
+{% if st.log and st.state in ('done', 'failed') %}
+  <details><summary>Build notes</summary><pre>{{ st.log }}</pre></details>
+{% endif %}
+{% endblock %}

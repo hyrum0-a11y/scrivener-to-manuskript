@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Obsidian → EPUB · Author Tools{% endblock %}
+{% block main %}
+<p class="back"><a href="{{ url_for('home') }}">← All tools</a></p>
+<h1>Obsidian → EPUB</h1>
+<p>Upload your book vault as a .zip and get back an EPUB e-book.</p>
+
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<form class="card" method="post" enctype="multipart/form-data">
+  <label for="vault">Vault (.zip, up to {{ max_mb }} MB)</label>
+  <input id="vault" name="vault" type="file" accept=".zip,application/zip" required>
+  <button type="submit">Make my EPUB</button>
+</form>
+
+<h2>How to prepare your vault</h2>
+<ol>
+  <li>Your vault needs <code>Book Info.md</code> (title, author and so on),
+      <code>Manuscript Reading Order.md</code> and a <code>Manuscript/</code> folder.
+      New here? <a href="{{ url_for('starter_vault') }}">Download the starter vault</a> and write in that.</li>
+  <li>Put a cover image inside the vault and set <code>cover:</code> in <code>Book Info.md</code> to its file name.</li>
+  <li>Zip the whole vault folder. On Windows, right-click it and choose <em>Compress to ZIP</em>; on a Mac, <em>Compress</em>.</li>
+</ol>
+{% endblock %}

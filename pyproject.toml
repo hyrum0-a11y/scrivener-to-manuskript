@@ -25,4 +25,4 @@ Homepage = "https://github.com/hyrum0-a11y/scrivener-to-manuskript"
 packages = ["obsidian_book"]
 
 [tool.setuptools.package-data]
-obsidian_book = ["epub_style.css"]
+obsidian_book = ["epub_style.css", "untrusted.lua"]

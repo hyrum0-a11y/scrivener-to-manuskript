@@ -27,3 +27,6 @@ NEXT_STEPS.md
 build/
 dist/
 *.egg-info/
+
+# Web app job data when run locally
+authortools-data/

@@ -86,8 +86,10 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 CSS = Path(__file__).parent / "epub_style.css"  # first-line indent, no paragraph spacing
+UNTRUSTED_FILTER = Path(__file__).parent / "untrusted.lua"  # see build_epub(untrusted=True)
 
 
 class BookError(Exception):
@@ -609,12 +611,40 @@ def check(vault) -> None:
     print("Check passed: the vault is ready to compile.")
 
 
-def build_epub(vault, output_dir=None) -> Path:
+def check_untrusted_cover(vault: Path, book_info: dict) -> None:
+    """For uploaded vaults: the cover must be a relative path inside the
+    vault, so `cover: /etc/passwd` can't pull a server file into the epub."""
+    cover_str = book_info["cover"]
+    if not cover_str:
+        return
+    if Path(cover_str).is_absolute() or ".." in Path(cover_str).parts or "\\" in cover_str:
+        raise BookError(f"ERROR: cover '{cover_str}' in Book Info.md must be a file inside the vault "
+                        f"(e.g. \"cover.jpg\"), not an absolute path or one using '..'.")
+    if not resolve_cover(vault, book_info).is_relative_to(vault):
+        raise BookError(f"ERROR: cover '{cover_str}' in Book Info.md points outside the vault.")
+
+
+def safe_filename(name: str) -> str:
+    """A title usable as a file name: no path separators or characters
+    Windows rejects, so a title like "Either/Or" can't write elsewhere."""
+    return re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", name).strip(" .") or "book"
+
+
+def build_epub(vault, output_dir=None, *, untrusted: bool = False) -> Path:
     """Compile a vault to an epub and return the written file's path.
     output_dir overrides Book Info.md's output_dir. Raises BookError on any
     problem the author needs to fix. This is the entry point for callers
-    other than the CLI (e.g. a future web tool)."""
+    other than the CLI (e.g. the web tool).
+
+    untrusted=True is for vaults uploaded by strangers: the cover must sit
+    inside the vault, YAML metadata blocks inside notes are ignored (they
+    could set cover-image/css to a server file), and untrusted.lua drops
+    images and raw HTML that point at absolute paths, '..' or URLs.
+    pandoc's own --sandbox can't be used here: it also refuses --css and
+    --epub-cover-image (checked on pandoc 3.1 and 3.8)."""
     vault, book_info = load_vault(vault)
+    if untrusted:
+        check_untrusted_cover(vault, book_info)
     errors = check_vault(vault, book_info)
     if errors:
         raise BookError(f"Not building: fix the {errors} broken link(s) above first "
@@ -629,7 +659,7 @@ def build_epub(vault, output_dir=None) -> Path:
     author_file_as, publisher, isbn = book_info["author_file_as"], book_info["publisher"], book_info["isbn"]
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M")
-    output = (resolve_output_dir(book_info, output_dir) / f"{title}_{timestamp}.epub").resolve()
+    output = (resolve_output_dir(book_info, output_dir) / f"{safe_filename(title)}_{timestamp}.epub").resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
 
     print("Assembling manuscript...")
@@ -638,17 +668,20 @@ def build_epub(vault, output_dir=None) -> Path:
     # Supplying title/author via --epub-metadata (raw Dublin Core XML) instead
     # of --metadata avoids pandoc auto-generating a visible, page-turnable
     # title page — the published SS1/SS2 epubs go straight from cover to
-    # Information with no separate title page.
+    # Information with no separate title page. Values are XML-escaped so a
+    # title like "Salt & Smoke" doesn't produce invalid metadata.
+    title_x, author_x, file_as_x, publisher_x, isbn_x = map(
+        xml_escape, (title, author, author_file_as, publisher, isbn))
     epub_meta = (
-        f"<dc:title>{title}</dc:title>\n"
-        f'<dc:creator id="author">{author}</dc:creator>\n'
+        f"<dc:title>{title_x}</dc:title>\n"
+        f'<dc:creator id="author">{author_x}</dc:creator>\n'
         f'<meta refines="#author" property="role">aut</meta>\n'
-        f'<meta refines="#author" property="file-as">{author_file_as}</meta>\n'
+        f'<meta refines="#author" property="file-as">{file_as_x}</meta>\n'
         f"<dc:language>en</dc:language>\n"
-        f"<dc:publisher>{publisher}</dc:publisher>\n"
+        f"<dc:publisher>{publisher_x}</dc:publisher>\n"
     )
     if isbn:
-        epub_meta += f'<dc:identifier id="isbn">urn:isbn:{isbn}</dc:identifier>\n'
+        epub_meta += f'<dc:identifier id="isbn">urn:isbn:{isbn_x}</dc:identifier>\n'
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir) / "book.md"
@@ -668,6 +701,10 @@ def build_epub(vault, output_dir=None) -> Path:
         cover = resolve_cover(vault, book_info)
         if cover and cover.is_file():
             cmd += ["--epub-cover-image", str(cover)]
+        if untrusted:
+            cmd += ["--from", "markdown-yaml_metadata_block",
+                    "--resource-path", str(vault),
+                    "--lua-filter", str(UNTRUSTED_FILTER)]
 
         print("Running pandoc...")
         result = subprocess.run(cmd, capture_output=True, text=True)

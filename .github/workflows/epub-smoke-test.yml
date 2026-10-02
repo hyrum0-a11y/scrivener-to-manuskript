@@ -56,6 +56,13 @@ jobs:
           obsidian-book epub "$GITHUB_WORKSPACE/vault-template" --output-dir cli-build
           java -jar "$RUNNER_TEMP/epubcheck-${EPUBCHECK_VERSION}/epubcheck.jar" cli-build/*.epub
 
+      # Web tool: upload safety, the untrusted (uploaded-vault) build, and an
+      # end-to-end upload through the Flask app.
+      - name: Web app tests
+        run: |
+          pip install -r webapp/requirements.txt pytest
+          pytest -q tests
+
       - uses: actions/upload-artifact@v4
         with:
           name: template-epub

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block main %}
+<section class="intro">
+  <h1>Write your book in Obsidian. Publish it anywhere.</h1>
+  <p>Pick a tool to get started.</p>
+</section>
+<ul class="tools">
+  {% for t in tools %}
+  <li class="tool {{ 'live' if t.live else 'soon' }}">
+    {% if t.live %}
+    <a href="{{ url_for(t.slug + '_form') }}">
+      <h2>{{ t.name }}</h2>
+      <p>{{ t.desc }}</p>
+      <span class="badge">Open</span>
+    </a>
+    {% else %}
+    <div>
+      <h2>{{ t.name }}</h2>
+      <p>{{ t.desc }}</p>
+      <span class="badge">Coming soon</span>
+    </div>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}
