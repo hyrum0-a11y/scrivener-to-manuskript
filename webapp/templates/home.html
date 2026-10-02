@@ -2,20 +2,30 @@
 {% block main %}
 <section class="intro">
   <h1>Write your book in Obsidian. Publish it anywhere.</h1>
-  <p>Pick a tool to get started.</p>
+  <p class="lead">Free tools that turn your Obsidian vault into finished books.</p>
+  <p><a class="button" href="{{ url_for('convert_form') }}">Convert my book</a></p>
 </section>
+
+<ol class="steps">
+  <li><strong>Pick your vault</strong><span>Choose your book's Obsidian folder. No zipping needed.</span></li>
+  <li><strong>We check and convert</strong><span>Broken links and missing notes are flagged before anything is built.</span></li>
+  <li><strong>Download</strong><span>Get your EPUB or PDF. Your files are deleted from the server within an hour.</span></li>
+</ol>
+
+{% for group in groups %}
+<h2 class="group">{{ group.title }}</h2>
 <ul class="tools">
-  {% for t in tools %}
-  <li class="tool {{ 'live' if t.live else 'soon' }}">
-    {% if t.live %}
-    <a href="{{ url_for('convert_form', fmt=t.slug) }}">
-      <h2>{{ t.name }}</h2>
+  {% for t in group.tools %}
+  <li class="tool {{ 'live' if t.href else 'soon' }}">
+    {% if t.href %}
+    <a href="{{ t.href }}">
+      <h3>{{ t.name }}</h3>
       <p>{{ t.desc }}</p>
       <span class="badge">Open</span>
     </a>
     {% else %}
     <div>
-      <h2>{{ t.name }}</h2>
+      <h3>{{ t.name }}</h3>
       <p>{{ t.desc }}</p>
       <span class="badge">Coming soon</span>
     </div>
@@ -23,4 +33,5 @@
   </li>
   {% endfor %}
 </ul>
+{% endfor %}
 {% endblock %}

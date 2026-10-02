@@ -14,8 +14,11 @@ body {
   font: 17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 main, header.site, footer.site { max-width: 760px; margin: 0 auto; padding: 0 16px; }
-header.site { padding-top: 20px; }
-.brand { font-weight: 700; color: var(--fg); text-decoration: none; font-size: 1.1rem; }
+header.site { padding-top: 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-family: Georgia, "Times New Roman", serif;
+         font-weight: 600; color: var(--fg); text-decoration: none; font-size: 1.2rem; }
+.byline { color: var(--muted); font-size: .85rem; text-decoration: none; }
+.byline:hover { color: var(--accent); }
 footer.site { color: var(--muted); font-size: .85rem; padding: 40px 16px 24px; }
 h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 600; line-height: 1.2; margin: 1.2em 0 .4em; }
 h2 { font-size: 1.15rem; margin: 1.6em 0 .4em; }
@@ -31,7 +34,7 @@ code { background: var(--line); padding: 0 .25em; border-radius: 3px; font-size:
   display: block; height: 100%; padding: 16px 18px; border: 1px solid var(--line);
   border-radius: 10px; background: var(--card); color: var(--fg); text-decoration: none;
 }
-.tool h2 { margin: 0 0 .3em; font-size: 1.05rem; }
+.tool h3 { margin: 0 0 .3em; font-size: 1.05rem; }
 .tool p { margin: 0 0 .8em; font-size: .92rem; color: var(--muted); }
 .tool.live > a { border-color: var(--accent); }
 .tool.live > a:hover { box-shadow: 0 2px 10px rgb(0 0 0 / .08); }
@@ -57,3 +60,38 @@ details summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
 details input { margin-top: 8px; }
 button:disabled { opacity: .6; cursor: wait; }
 [hidden] { display: none !important; }
+
+.lead { font-size: 1.1rem; color: var(--muted); margin-top: 0; }
+.intro .button { margin-top: .4em; }
+h2.group { margin-top: 2em; font-family: Georgia, "Times New Roman", serif; font-size: 1.3rem; font-weight: 600; }
+
+.steps { list-style: none; counter-reset: step; padding: 0; margin: 2em 0 .5em; display: grid; gap: 12px;
+         grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.steps li { counter-increment: step; padding: 14px 16px 14px 52px; position: relative;
+            background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.steps li::before { content: counter(step); position: absolute; left: 14px; top: 14px; width: 26px; height: 26px;
+                    border-radius: 50%; background: var(--accent); color: var(--accent-fg);
+                    display: grid; place-items: center; font-weight: 700; font-size: .85rem; }
+.steps strong { display: block; }
+.steps span { color: var(--muted); font-size: .9rem; }
+
+fieldset { border: 0; padding: 0; margin: 0 0 6px; display: grid; gap: 8px; }
+legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+label.check { display: flex; gap: 10px; align-items: baseline; font-weight: normal; cursor: pointer; }
+label.check .muted { font-size: .9rem; }
+
+.book { display: flex; gap: 20px; align-items: flex-start; margin-top: 1.4em; }
+.book h1 { margin: 0 0 .1em; }
+.book .author { margin: 0 0 .4em; font-style: italic; }
+.book .stats { margin: 0 0 1em; font-size: .9rem; }
+.cover { width: 120px; height: auto; border-radius: 4px; box-shadow: 0 2px 10px rgb(0 0 0 / .2); flex-shrink: 0; }
+.downloads { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 .5em; }
+@media (max-width: 520px) { .book { flex-direction: column; } .cover { width: 100px; } }
+
+.error { margin: 1em 0; }
+.issues { padding-left: 1.2em; }
+.issues > li { margin-bottom: .8em; }
+.issues > li.error { background: none; padding: 0; margin: 0 0 .8em; color: var(--error-fg); }
+.issues ul { color: var(--fg); font-size: .9rem; margin: .3em 0 0; }
+.ok { color: #2e7d32; }
+@media (prefers-color-scheme: dark) { .ok { color: #8fd694; } }

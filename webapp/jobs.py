@@ -52,7 +52,7 @@ class JobQueue:
 
     # --- public -----------------------------------------------------------
 
-    def submit(self, fmt: str, save_upload) -> str:
+    def submit(self, formats: list, save_upload) -> str:
         """save_upload(job_dir) writes the upload into job_dir, as upload.zip
         or a vault/ folder. If it raises, the job is discarded."""
         if self._queue.qsize() >= self.limits.max_queued:
@@ -65,7 +65,7 @@ class JobQueue:
         except BaseException:
             remove(job_dir)
             raise
-        self._write_status(job_id, {"state": "queued", "format": fmt, "created": time.time()})
+        self._write_status(job_id, {"state": "queued", "formats": formats, "created": time.time()})
         self._queue.put(job_id)
         return job_id
 
@@ -77,12 +77,17 @@ class JobQueue:
         except (OSError, ValueError):
             return None
 
-    def output_path(self, job_id: str):
+    def output_path(self, job_id: str, key: str):
+        """The built file for a format ("epub", "pdf"), or "cover" for the
+        cover thumbnail; None if there isn't one."""
         st = self.status(job_id)
-        if not st or st.get("state") != "done":
+        if not st or st.get("state") not in ("done", "failed"):
+            return None
+        name = st.get("cover") if key == "cover" else (st.get("files") or {}).get(key)
+        if not name:
             return None
         out_dir = (self.jobs_dir / job_id / "out").resolve()
-        path = (out_dir / st["file"]).resolve()
+        path = (out_dir / name).resolve()
         return path if path.parent == out_dir and path.is_file() else None
 
     def position(self, job_id: str) -> int:
@@ -124,7 +129,7 @@ class JobQueue:
         st = self.status(job_id) or {}
         self._write_status(job_id, {**st, "state": "running", "started": time.time()})
         lim = self.limits
-        cmd = [sys.executable, "-m", "webapp.runner", str(job_dir), st.get("format", "epub"),
+        cmd = [sys.executable, "-m", "webapp.runner", str(job_dir), ",".join(st.get("formats", ["epub"])),
                str(lim.max_unzipped_bytes), str(lim.max_files)]
         proc = subprocess.Popen(cmd, cwd=job_dir, preexec_fn=self._limit_child,
                                 start_new_session=True, stdout=subprocess.DEVNULL,
@@ -156,7 +161,9 @@ class JobQueue:
         (job_dir / "upload.zip").unlink(missing_ok=True)
         st = self.status(job_id) or {}
         st.update(state="done" if result.get("ok") else "failed", finished=time.time(),
-                  file=result.get("file"), error=result.get("error"), log=result.get("log", ""))
+                  error=result.get("error"), log=result.get("log", ""), book=result.get("book"),
+                  issues=result.get("issues", []), files=result.get("files", {}),
+                  errors=result.get("errors", {}), cover=result.get("cover"))
         self._write_status(job_id, st)
 
     def _clear_leftovers(self) -> None:

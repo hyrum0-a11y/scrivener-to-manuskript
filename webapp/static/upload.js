@@ -45,11 +45,12 @@
       return;
     }
     const data = new FormData();
+    for (const box of form.querySelectorAll("input[name=formats]:checked")) data.append("formats", box.value);
     for (const f of files) data.append("files", f, f.webkitRelativePath);
     button.disabled = true;
     button.textContent = "Uploading…";
     try {
-      const resp = await fetch(form.action || location.href, { method: "POST", body: data });
+      const resp = await fetch(form.action, { method: "POST", body: data });
       if (resp.redirected) {
         location.href = resp.url;
         return;

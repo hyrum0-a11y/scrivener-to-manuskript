@@ -1,21 +1,35 @@
 {% extends "base.html" %}
-{% block title %}{{ tool.name }} · Author Tools{% endblock %}
+{% block title %}Convert your book · Author Tools{% endblock %}
 {% block main %}
 <p class="back"><a href="{{ url_for('home') }}">← All tools</a></p>
-<h1>{{ tool.name }}</h1>
-<p>{{ tool.blurb }}</p>
+<h1>Convert your book</h1>
+<p>Pick your Obsidian vault and the formats you want. The vault is checked first, so you'll see any problems before anything is built.</p>
 
 <p class="error" role="alert" id="error" {% if not error %}hidden{% endif %}>{{ error or '' }}</p>
 
-<form class="card" id="upload" method="post" enctype="multipart/form-data" data-max-mb="{{ max_mb }}">
-  <label for="folder">Pick your vault folder</label>
-  <input id="folder" name="files" type="file" webkitdirectory multiple>
-  <p class="muted small" id="folder-summary">Your browser will ask to confirm the upload. Only your book's files are sent; Obsidian's settings folder is skipped.</p>
-  <details>
-    <summary>Or upload a .zip of the vault</summary>
-    <input id="vault" name="vault" type="file" accept=".zip,application/zip">
-  </details>
-  <button type="submit" id="submit">Make my {{ tool.what }}</button>
+<form class="card" id="upload" method="post" action="{{ url_for('convert_upload') }}"
+      enctype="multipart/form-data" data-max-mb="{{ max_mb }}">
+  <fieldset>
+    <legend>1. Choose formats</legend>
+    {% for key, f in formats.items() %}
+    <label class="check">
+      <input type="checkbox" name="formats" value="{{ key }}" {% if key in selected %}checked{% endif %}>
+      <span><strong>{{ f.label }}</strong> <span class="muted">{{ f.hint }}</span></span>
+    </label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>2. Pick your vault folder</legend>
+    <input id="folder" name="files" type="file" webkitdirectory multiple>
+    <p class="muted small" id="folder-summary">Your browser will ask to confirm the upload. Only your book's files are sent; Obsidian's settings folder is skipped.</p>
+    <details>
+      <summary>Or upload a .zip of the vault</summary>
+      <input id="vault" name="vault" type="file" accept=".zip,application/zip">
+    </details>
+  </fieldset>
+
+  <button type="submit" id="submit">Check and convert</button>
   <p class="muted small">Up to {{ max_mb }} MB.</p>
 </form>
 
@@ -24,12 +38,9 @@
   <li>Your vault needs <code>Book Info.md</code> (title, author and so on),
       <code>Manuscript Reading Order.md</code> and a <code>Manuscript/</code> folder.
       New here? <a href="{{ url_for('starter_vault') }}">Download the starter vault</a> and write in that.</li>
-  {% if fmt == 'epub' %}
   <li>Put a cover image inside the vault and set <code>cover:</code> in <code>Book Info.md</code> to its file name.</li>
-  {% else %}
   <li>Optional PDF settings in <code>Book Info.md</code>: <code>trim_size</code> (e.g. <code>5.25in 8in</code>),
       <code>subtitle</code>, <code>running_header</code>, and <code>pov_signs_dir</code> (a folder inside the vault).</li>
-  {% endif %}
 </ol>
 <script src="{{ url_for('static', filename='upload.js') }}"></script>
 {% endblock %}

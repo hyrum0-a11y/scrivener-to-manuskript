@@ -223,8 +223,8 @@ MIT
 
 ## Web tool (authortools.hyrumjones.com)
 
-`webapp/` is a small Flask site that lists every tool and runs the
-Obsidian → EPUB conversion on an uploaded, zipped vault (the other tools
+`webapp/` is a small Flask site that lists every tool and converts an
+uploaded vault (a picked folder or a zip) to EPUB and/or PDF at `/convert` (the other tools
 show as "coming soon"). Uploads go through a job queue, are unzipped with
 zip-slip and size checks, and are built with `build_epub(untrusted=True)`.
 

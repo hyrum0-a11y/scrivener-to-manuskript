@@ -1,5 +1,5 @@
-"""authortools.hyrumjones.com: a home page listing every tool, plus the
-Obsidian -> EPUB and Obsidian -> PDF converters.
+"""authortools.hyrumjones.com: a home page listing every tool, plus one
+upload page that converts an Obsidian vault to EPUB and/or PDF.
 
 Run locally:   flask --app 'webapp.app:create_app()' run
 In production: gunicorn 'webapp.app:create_app()', one process; see deploy/DEPLOY.md.
@@ -30,28 +30,38 @@ def pdf_available() -> bool:
     return all(importlib.util.find_spec(m) for m in ("weasyprint", "pymupdf"))
 
 
-# The converters a vault can be uploaded to. "what" finishes "Make my ...".
-CONVERTERS = {
-    "epub": {"name": "Obsidian → EPUB", "what": "EPUB", "mimetype": "application/epub+zip",
-             "blurb": "Upload your book vault and get back an EPUB e-book."},
-    "pdf": {"name": "Obsidian → PDF", "what": "PDF", "mimetype": "application/pdf",
-            "blurb": "Upload your book vault and get back a print-style PDF, "
-                     "with part pages, drop caps and running headers."},
+# Output formats a vault can be converted to, in the order they're offered.
+FORMATS = {
+    "epub": {"label": "EPUB e-book", "hint": "for Kindle, Apple Books, Kobo and other readers",
+             "mimetype": "application/epub+zip"},
+    "pdf": {"label": "Print PDF", "hint": "with part pages, drop caps and running headers",
+            "mimetype": "application/pdf"},
 }
+COVER_MIMETYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                   ".gif": "image/gif", ".webp": "image/webp"}
 
 
-def tools() -> list:
+def available_formats() -> list:
+    return [f for f in FORMATS if f != "pdf" or pdf_available()]
+
+
+def tool_groups() -> list:
+    convert = lambda fmt: url_for("convert_form", fmt=fmt)
     return [
-        {"slug": "epub", "name": "Obsidian → EPUB", "live": True,
-         "desc": "Turn your Obsidian book vault into an e-book for Kindle, Apple Books, Kobo and other readers."},
-        {"slug": "pdf", "name": "Obsidian → PDF", "live": pdf_available(),
-         "desc": "A print-ready PDF with part pages, drop caps and running headers."},
-        {"slug": "odt", "name": "Obsidian → ODT", "live": False,
-         "desc": "An editable manuscript you can open in LibreOffice or Word."},
-        {"slug": "scrivener", "name": "Scrivener → Markdown", "live": False,
-         "desc": "Move a Scrivener 3 project into plain Markdown files (and a Manuskript project)."},
-        {"slug": "epub-import", "name": "EPUB → Obsidian", "live": False,
-         "desc": "Pull a published e-book back into a vault you can keep writing in."},
+        {"title": "Publish your book", "tools": [
+            {"name": "Obsidian → EPUB", "href": convert("epub"),
+             "desc": "Turn your Obsidian book vault into an e-book for Kindle, Apple Books, Kobo and other readers."},
+            {"name": "Obsidian → PDF", "href": convert("pdf") if pdf_available() else None,
+             "desc": "A print-ready PDF with part pages, drop caps and running headers."},
+            {"name": "Obsidian → ODT", "href": None,
+             "desc": "An editable manuscript you can open in LibreOffice or Word."},
+        ]},
+        {"title": "Bring your work in", "tools": [
+            {"name": "Scrivener → Markdown", "href": None,
+             "desc": "Move a Scrivener 3 project into plain Markdown files (and a Manuskript project)."},
+            {"name": "EPUB → Obsidian", "href": None,
+             "desc": "Pull a published e-book back into a vault you can keep writing in."},
+        ]},
     ]
 
 
@@ -59,33 +69,37 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
     app = Flask(__name__)
     max_mb = int(os.environ.get("AUTHORTOOLS_MAX_UPLOAD_MB", "50"))
     app.config["MAX_CONTENT_LENGTH"] = max_mb * 2**20
-    app.config["MAX_FORM_PARTS"] = MAX_FOLDER_FILES + 10  # a picked folder sends one part per file
+    app.config["MAX_FORM_PARTS"] = MAX_FOLDER_FILES + 20  # a picked folder sends one part per file
     data_dir = Path(data_dir or os.environ.get("AUTHORTOOLS_DATA_DIR", "authortools-data"))
     jobs = JobQueue(data_dir, limits or Limits(),
                     workers=workers or int(os.environ.get("AUTHORTOOLS_WORKERS", "1")))
     app.extensions["jobs"] = jobs
     starter_zip = {}
 
-    def converter(fmt):
-        if fmt not in CONVERTERS or (fmt == "pdf" and not pdf_available()):
-            abort(404)
-        return CONVERTERS[fmt]
-
-    def form(fmt, error=None, status=200):
-        return render_template("convert.html", fmt=fmt, tool=converter(fmt), max_mb=max_mb,
-                               error=error), status
+    def form(selected=None, error=None, status=200):
+        offered = available_formats()
+        selected = [f for f in (selected or ["epub"]) if f in offered] or ["epub"]
+        return render_template("convert.html", formats={f: FORMATS[f] for f in offered},
+                               selected=selected, max_mb=max_mb, error=error), status
 
     @app.get("/")
     def home():
-        return render_template("home.html", tools=tools())
+        return render_template("home.html", groups=tool_groups())
 
+    @app.get("/convert")
+    def convert_form():
+        return form(request.args.getlist("fmt"))
+
+    # Old single-format addresses keep working.
     @app.get("/<any(epub, pdf):fmt>")
-    def convert_form(fmt):
-        return form(fmt)
+    def old_form(fmt):
+        return redirect(url_for("convert_form", fmt=fmt), code=301)
 
-    @app.post("/<any(epub, pdf):fmt>")
-    def convert_upload(fmt):
-        converter(fmt)
+    @app.post("/convert")
+    def convert_upload():
+        formats = [f for f in available_formats() if f in request.form.getlist("formats")]
+        if not formats:
+            return form(error="Tick at least one format to make.", status=400)
         folder = [f for f in request.files.getlist("files") if f.filename]
         upload = request.files.get("vault")
         if folder:
@@ -94,17 +108,17 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
                            max_files=MAX_FOLDER_FILES)
         elif upload and upload.filename:
             if not upload.filename.lower().endswith(".zip"):
-                return form(fmt, "Upload your vault as a .zip file, or pick the vault folder.", 400)
+                return form(formats, "Upload your vault as a .zip file, or pick the vault folder.", 400)
             def save(job_dir):
                 upload.save(job_dir / "upload.zip")
         else:
-            return form(fmt, "Pick your vault folder (or a .zip of it) first.", 400)
+            return form(formats, "Pick your vault folder (or a .zip of it) first.", 400)
         try:
-            job_id = jobs.submit(fmt, save)
+            job_id = jobs.submit(formats, save)
         except UploadError as e:
-            return form(fmt, str(e), 400)
+            return form(formats, str(e), 400)
         except QueueFull:
-            return form(fmt, "The converter is busy right now. Try again in a few minutes.", 503)
+            return form(formats, "The converter is busy right now. Try again in a few minutes.", 503)
         return redirect(url_for("job_page", job_id=job_id), code=303)
 
     @app.get("/jobs/<job_id>")
@@ -112,19 +126,24 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
         st = jobs.status(job_id)
         if st is None:
             abort(404)
-        fmt = st.get("format", "epub")
-        return render_template("job.html", job_id=job_id, st=st, fmt=fmt, tool=CONVERTERS[fmt],
+        return render_template("job.html", job_id=job_id, st=st, formats=FORMATS,
                                position=jobs.position(job_id),
                                keep_minutes=jobs.limits.keep_seconds // 60)
 
-    @app.get("/jobs/<job_id>/download")
-    def job_download(job_id):
-        path = jobs.output_path(job_id)
+    @app.get("/jobs/<job_id>/<any(epub, pdf):fmt>")
+    def job_download(job_id, fmt):
+        path = jobs.output_path(job_id, fmt)
         if path is None:
             abort(404)
-        fmt = jobs.status(job_id).get("format", "epub")
-        return send_file(path, mimetype=CONVERTERS[fmt]["mimetype"], as_attachment=True,
+        return send_file(path, mimetype=FORMATS[fmt]["mimetype"], as_attachment=True,
                          download_name=path.name)
+
+    @app.get("/jobs/<job_id>/cover")
+    def job_cover(job_id):
+        path = jobs.output_path(job_id, "cover")
+        if path is None or path.suffix not in COVER_MIMETYPES:
+            abort(404)
+        return send_file(path, mimetype=COVER_MIMETYPES[path.suffix])
 
     @app.get("/starter-vault.zip")
     def starter_vault():
@@ -144,8 +163,7 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
 
     @app.errorhandler(413)
     def too_large(_):
-        fmt = request.path.strip("/") if request.path.strip("/") in CONVERTERS else "epub"
-        return form(fmt, f"That upload is over the {max_mb} MB limit (or has too many files).", 413)
+        return form(error=f"That upload is over the {max_mb} MB limit (or has too many files).", status=413)
 
     @app.errorhandler(404)
     def not_found(_):

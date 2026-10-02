@@ -1,24 +1,67 @@
 {% extends "base.html" %}
-{% block title %}Your {{ tool.what }} · Author Tools{% endblock %}
+{% set names = st.formats | map('upper') | join(' and ') %}
+{% block title %}Your book · Author Tools{% endblock %}
 {% block head %}{% if st.state in ('queued', 'running') %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block main %}
-<p class="back"><a href="{{ url_for('convert_form', fmt=fmt) }}">← Convert another</a></p>
+<p class="back"><a href="{{ url_for('convert_form', fmt=st.formats) }}">← Convert another</a></p>
+
 {% if st.state == 'queued' %}
   <h1>Waiting in line…</h1>
   <p>{% if position > 1 %}{{ position - 1 }} book(s) ahead of yours. {% endif %}This page updates by itself.</p>
 {% elif st.state == 'running' %}
-  <h1>Building your {{ tool.what }}…</h1>
-  <p>This usually takes a few seconds. This page updates by itself.</p>
-{% elif st.state == 'done' %}
-  <h1>Your {{ tool.what }} is ready</h1>
-  <p><a class="button" href="{{ url_for('job_download', job_id=job_id) }}">Download {{ st.file }}</a></p>
-  <p class="muted">The file is deleted from the server after {{ keep_minutes }} minutes.</p>
+  <h1>Checking and building your {{ names }}…</h1>
+  <p>An EPUB takes seconds; a PDF of a full novel can take a minute or two. This page updates by itself.</p>
 {% else %}
+  {% if st.book %}
+  <section class="book card">
+    {% if st.cover %}<img class="cover" src="{{ url_for('job_cover', job_id=job_id) }}" alt="Cover of {{ st.book.title }}">{% endif %}
+    <div>
+      <h1>{{ st.book.title }}</h1>
+      <p class="author">by {{ st.book.author }}</p>
+      <p class="muted stats">
+        {{ st.book.parts }} part{{ '' if st.book.parts == 1 else 's' }} ·
+        {{ st.book.chapters }} chapter{{ '' if st.book.chapters == 1 else 's' }} ·
+        {{ st.book.scenes }} scene{{ '' if st.book.scenes == 1 else 's' }} ·
+        {{ '{:,}'.format(st.book.words) }} words
+      </p>
+      {% if st.files %}
+      <p class="downloads">
+        {% for fmt in st.formats if st.files[fmt] %}
+        <a class="button" href="{{ url_for('job_download', job_id=job_id, fmt=fmt) }}">Download {{ fmt | upper }}</a>
+        {% endfor %}
+      </p>
+      <p class="muted small">Files are deleted from the server after {{ keep_minutes }} minutes.</p>
+      {% endif %}
+    </div>
+  </section>
+  {% else %}
   <h1>That didn't work</h1>
-  <pre class="error">{{ st.error }}</pre>
-  <p><a href="{{ url_for('convert_form', fmt=fmt) }}">Fix the vault and try again</a></p>
-{% endif %}
-{% if st.log and st.state in ('done', 'failed') %}
+  {% endif %}
+
+  {% if st.error %}<p class="error" role="alert">{{ st.error }}</p>{% endif %}
+  {% for fmt, msg in st.errors.items() %}
+  <div class="error"><strong>{{ fmt | upper }} failed.</strong> {{ msg }}</div>
+  {% endfor %}
+
+  {% if st.issues %}
+  <h2>Book check</h2>
+  <ul class="issues">
+    {% for issue in st.issues %}
+    <li class="{{ issue.level }}">
+      <strong>{{ 'Must fix' if issue.level == 'error' else 'Worth a look' }}:</strong> {{ issue.text }}
+      {% if issue['items'] %}<ul>{% for item in issue['items'] %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif st.book %}
+  <p class="ok">✓ Book check passed: every note in the reading order was found.</p>
+  {% endif %}
+
+  {% if st.state == 'failed' %}
+  <p><a href="{{ url_for('convert_form', fmt=st.formats) }}">Fix the vault and try again</a></p>
+  {% endif %}
+  {% if st.log %}
   <details><summary>Build notes</summary><pre>{{ st.log }}</pre></details>
+  {% endif %}
 {% endif %}
 {% endblock %}

@@ -126,17 +126,35 @@ def wait_for(client, url, timeout=60):
     deadline = time.time() + timeout
     while time.time() < deadline:
         page = client.get(url).get_data(as_text=True)
-        if "Waiting in line" not in page and "Building your" not in page:
+        if "Waiting in line" not in page and "Checking and building" not in page:
             return page
         time.sleep(0.2)
     raise AssertionError("job never finished")
 
 
-def test_home_lists_all_tools(client):
+def post(client, formats, **files):
+    return client.post("/convert", data={"formats": formats, **files}, content_type="multipart/form-data")
+
+
+def folder_parts(d: Path, prefix: str = "My Book") -> list:
+    """The multipart fields the folder picker's script sends."""
+    return [(io.BytesIO(f.read_bytes()), f"{prefix}/{f.relative_to(d).as_posix()}")
+            for f in d.rglob("*") if f.is_file()]
+
+
+def test_home_lists_all_tools_in_groups(client):
     page = client.get("/").get_data(as_text=True)
-    for name in ("Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Markdown", "EPUB → Obsidian"):
+    for name in ("Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Markdown", "EPUB → Obsidian",
+                 "Publish your book", "Bring your work in", "Pick your vault"):
         assert name in page
     assert page.count("Coming soon") == (3 if pdf_available() else 4)
+
+
+def test_old_addresses_redirect_and_preselect(client):
+    resp = client.get("/epub")
+    assert resp.status_code == 301 and resp.headers["Location"].endswith("/convert?fmt=epub")
+    page = client.get("/convert?fmt=epub").get_data(as_text=True)
+    assert 'value="epub" checked' in page
 
 
 def test_starter_vault_download(client):
@@ -146,45 +164,53 @@ def test_starter_vault_download(client):
 
 
 @needs_pandoc
-def test_upload_converts_and_downloads(client):
-    resp = client.post("/epub", data={"vault": (io.BytesIO(zip_of_dir(TEMPLATE)), "book.zip")},
-                       content_type="multipart/form-data")
+def test_zip_upload_converts_and_shows_book(client, tmp_path):
+    vault = make_vault(tmp_path)
+    resp = post(client, ["epub"], vault=(io.BytesIO(zip_of_dir(vault)), "book.zip"))
     assert resp.status_code == 303
     job_url = resp.headers["Location"]
     page = wait_for(client, job_url)
-    assert "Your EPUB is ready" in page, page
-    epub = client.get(job_url + "/download")
-    assert epub.status_code == 200
+    assert "Download EPUB" in page, page
+    assert "My Novel" in page and "Your Name" in page and "1 chapter" in page
+    assert "Book check passed" in page
+    epub = client.get(job_url + "/epub")
     assert zipfile.ZipFile(io.BytesIO(epub.data)).read("mimetype") == b"application/epub+zip"
+    cover = client.get(job_url + "/cover")
+    assert cover.mimetype == "image/png" and cover.data == PNG_1PX
+    assert client.get(job_url + "/pdf").status_code == 404
 
 
-def folder_parts(d: Path, prefix: str = "My Book") -> list:
-    """The multipart fields the folder picker's script sends."""
-    return [(io.BytesIO(f.read_bytes()), f"{prefix}/{f.relative_to(d).as_posix()}")
-            for f in d.rglob("*") if f.is_file()]
+@needs_pandoc
+def test_check_lists_broken_links_and_stops(client, tmp_path):
+    vault = make_vault(tmp_path)
+    order = vault / "Manuscript Reading Order.md"
+    order.write_text(order.read_text() + "\n- [[Missing Scene]]\n")
+    page = wait_for(client, post(client, ["epub"], files=folder_parts(vault)).headers["Location"])
+    assert "broken link" in page and "Missing Scene" in page and "Must fix" in page
+    assert "Download EPUB" not in page
 
 
 @needs_pandoc
 def test_folder_upload_converts(client):
-    resp = client.post("/epub", data={"files": folder_parts(TEMPLATE)}, content_type="multipart/form-data")
+    resp = post(client, ["epub"], files=folder_parts(TEMPLATE))
     assert resp.status_code == 303
-    assert "Your EPUB is ready" in wait_for(client, resp.headers["Location"])
+    assert "Download EPUB" in wait_for(client, resp.headers["Location"])
 
 
 @pytest.mark.parametrize("name", ["../evil.md", "/tmp/evil.md", "My Book/../../evil.md"])
-def test_folder_upload_rejects_unsafe_paths(client, tmp_path, name):
-    resp = client.post("/epub", data={"files": [(io.BytesIO(b"x"), name)]}, content_type="multipart/form-data")
+def test_folder_upload_rejects_unsafe_paths(client, name):
+    resp = post(client, ["epub"], files=[(io.BytesIO(b"x"), name)])
     assert resp.status_code == 400
     assert "unsafe path" in resp.get_data(as_text=True)
 
 
+@needs_pandoc
 @needs_pdf
-def test_pdf_upload_converts_and_downloads(client):
-    resp = client.post("/pdf", data={"files": folder_parts(TEMPLATE)}, content_type="multipart/form-data")
-    job_url = resp.headers["Location"]
+def test_both_formats_in_one_job(client):
+    job_url = post(client, ["epub", "pdf"], files=folder_parts(TEMPLATE)).headers["Location"]
     page = wait_for(client, job_url, timeout=120)
-    assert "Your PDF is ready" in page, page
-    pdf = client.get(job_url + "/download")
+    assert "Download EPUB" in page and "Download PDF" in page, page
+    pdf = client.get(job_url + "/pdf")
     assert pdf.mimetype == "application/pdf" and pdf.data.startswith(b"%PDF")
 
 
@@ -217,15 +243,12 @@ def test_untrusted_pdf_rejects_bad_settings(tmp_path, field):
 
 
 def test_upload_bad_zip_reports_error(client):
-    resp = client.post("/epub", data={"vault": (io.BytesIO(b"not a zip"), "book.zip")},
-                       content_type="multipart/form-data")
-    page = wait_for(client, resp.headers["Location"])
+    page = wait_for(client, post(client, ["epub"], vault=(io.BytesIO(b"not a zip"), "book.zip")).headers["Location"])
     assert "isn&#39;t a valid .zip" in page
 
 
-def test_upload_requires_zip_and_unknown_job_404s(client):
-    resp = client.post("/epub", data={"vault": (io.BytesIO(b"x"), "book.txt")},
-                       content_type="multipart/form-data")
-    assert resp.status_code == 400
+def test_upload_needs_format_and_zip_and_unknown_job_404s(client):
+    assert post(client, [], vault=(io.BytesIO(b"x"), "book.zip")).status_code == 400
+    assert post(client, ["epub"], vault=(io.BytesIO(b"x"), "book.txt")).status_code == 400
     assert client.get("/jobs/" + "0" * 32).status_code == 404
     assert client.get("/jobs/../../etc/passwd").status_code == 404
