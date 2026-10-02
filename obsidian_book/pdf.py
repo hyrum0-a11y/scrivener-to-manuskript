@@ -61,7 +61,7 @@ from pathlib import Path
 import pymupdf as fitz
 import weasyprint
 
-from obsidian_book.epub import BookError, parse_book_info
+from obsidian_book.epub import BookError, load_vault, resolve_output_dir, safe_filename
 
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
 ISBN_EBOOK_RE = re.compile(r'^(ISBN \(eBook\):\s*).*$', re.MULTILINE)
@@ -328,14 +328,17 @@ def slugify(text: str) -> str:
     return slug or "x"
 
 
-def parse_pov_signs(book_info: dict) -> tuple:
+def parse_pov_signs(book_info: dict, vault: Path = None) -> tuple:
     """Parse the optional pov_signs_dir/pov_signs Book Info.md fields into
     (signs_dir, {name: filename}). Returns (None, {}) if the book has no
-    sign images configured — sign_images_for() then always returns []."""
+    sign images configured — sign_images_for() then always returns [].
+    A relative pov_signs_dir is resolved against the vault when given."""
     signs_dir_str = book_info.get("pov_signs_dir", "")
     if not signs_dir_str:
         return None, {}
     signs_dir = Path(signs_dir_str)
+    if vault is not None and not signs_dir.is_absolute():
+        signs_dir = vault / signs_dir
     pov_sign = {}
     for pair in book_info.get("pov_signs", "").split(","):
         pair = pair.strip()
@@ -470,7 +473,7 @@ def render_scene(fname: str, resolve, is_first: bool) -> str:
 def build_html(vault: Path, book_info: dict) -> tuple:
     reading_order_path = vault / "Manuscript Reading Order.md"
     if not reading_order_path.is_file():
-        sys.exit(f"ERROR: {reading_order_path} not found — it defines the compile order.")
+        raise BookError(f"ERROR: {reading_order_path} not found — it defines the compile order.")
 
     # Named book_title/book_subtitle, not title/subtitle — this function
     # reuses those shorter names as per-item loop variables below (front/back
@@ -483,7 +486,7 @@ def build_html(vault: Path, book_info: dict) -> tuple:
         title_lines = [book_title.upper(), ""]
     series_position = book_info.get("series_position", "")
     series_length = book_info.get("series_length", "")
-    signs_dir, pov_sign = parse_pov_signs(book_info)
+    signs_dir, pov_sign = parse_pov_signs(book_info, vault)
 
     front_matter, parts, back_matter = parse_reading_order(reading_order_path)
     file_index = index_vault_files(vault)
@@ -491,7 +494,7 @@ def build_html(vault: Path, book_info: dict) -> tuple:
     def resolve(fname: str) -> Path:
         p = file_index.get(fname)
         if p is None:
-            sys.exit(f"ERROR: '{fname}' is referenced in Manuscript Reading Order.md "
+            raise BookError(f"ERROR: '{fname}' is referenced in Manuscript Reading Order.md "
                       f"but no matching file was found in the vault.")
         return p
 
@@ -898,6 +901,81 @@ def blank_chapter_opening_headers(pdf_path: Path, chapter_titles: list) -> None:
     doc.close()
 
 
+TRIM_SIZE_RE = re.compile(r"^\d+(\.\d+)?in \d+(\.\d+)?in$")
+
+
+def _vault_only_fetcher(vault: Path):
+    """A WeasyPrint URL fetcher for uploaded vaults: only file:// URLs inside
+    the vault (e.g. POV sign images) and data: URIs load. Everything else
+    (server files, http, ftp) fails, and WeasyPrint just skips that image."""
+    from urllib.parse import unquote, urlparse
+    from urllib.request import url2pathname
+
+    def allowed(url: str) -> bool:
+        parsed = urlparse(url)
+        if parsed.scheme == "data":
+            return True
+        if parsed.scheme != "file" or parsed.netloc not in ("", "localhost"):
+            return False
+        return Path(url2pathname(unquote(parsed.path))).resolve().is_relative_to(vault)
+
+    if hasattr(weasyprint, "URLFetcher"):  # WeasyPrint 68+
+        class VaultFetcher(weasyprint.URLFetcher):
+            def fetch(self, url, headers=None):
+                if not allowed(url):
+                    raise ValueError(f"blocked: {url}")
+                return super().fetch(url, headers)
+        return VaultFetcher(allowed_protocols={"file", "data"}, allow_redirects=False)
+
+    def fetch(url, *args, **kwargs):  # older WeasyPrint: a plain function
+        if not allowed(url):
+            raise ValueError(f"blocked: {url}")
+        return weasyprint.default_url_fetcher(url, *args, **kwargs)
+    return fetch
+
+
+def build_pdf(vault, output_dir=None, *, untrusted: bool = False) -> Path:
+    """Compile a vault to a print-style PDF and return its path. Raises
+    BookError on problems the author needs to fix.
+
+    untrusted=True is for vaults uploaded to the web tool: pov_signs_dir
+    must be a folder inside the vault, trim_size must look like
+    "5.25in 8in", and WeasyPrint may only load files from inside the vault
+    (no server files, no network)."""
+    vault, book_info = load_vault(vault)
+
+    trim_size = book_info.get("trim_size") or "5.25in 8in"
+    running_header = book_info.get("running_header") or book_info["title"].upper()
+    if untrusted:
+        signs = book_info.get("pov_signs_dir", "")
+        if signs and (Path(signs).is_absolute() or ".." in Path(signs).parts):
+            raise BookError(f"ERROR: pov_signs_dir '{signs}' in Book Info.md must be a folder inside "
+                            f"the vault (e.g. \"pov-signs\"), not an absolute path or one using '..'.")
+        if not TRIM_SIZE_RE.match(trim_size):
+            raise BookError(f"ERROR: trim_size '{trim_size}' in Book Info.md should look like \"5.25in 8in\".")
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M")
+    output = (resolve_output_dir(book_info, output_dir)
+              / f"{safe_filename(book_info['title'])}_{timestamp}.pdf").resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    print("Assembling manuscript...")
+    doc_html, chapter_titles = build_html(vault, book_info)
+
+    print("Rendering PDF (weasyprint)...")
+    fetcher = {"url_fetcher": _vault_only_fetcher(vault)} if untrusted else {}
+    css = build_css(trim_size, book_info["author"], running_header)
+    weasyprint.HTML(string=doc_html, base_url=str(vault), **fetcher).write_pdf(
+        str(output), stylesheets=[weasyprint.CSS(string=css, **fetcher)]
+    )
+
+    print("Removing running header from each chapter's opening page...")
+    blank_chapter_opening_headers(output, chapter_titles)
+
+    print(f"Done. Written: {output}")
+    return output
+
+
 def _main(argv=None) -> None:
     parser = argparse.ArgumentParser(
         description="Compile an Obsidian vault into a print-style PDF (WeasyPrint). "
@@ -905,36 +983,7 @@ def _main(argv=None) -> None:
     parser.add_argument("vault", help="path to the Obsidian vault to compile")
     parser.add_argument("--output-dir", help="override the vault's Book Info.md output_dir for this run")
     args = parser.parse_args(argv)
-
-    vault = Path(args.vault).expanduser().resolve()
-    if not (vault / "Manuscript").is_dir():
-        sys.exit(f"ERROR: {vault} does not look like a vault (no Manuscript/ folder)")
-
-    book_info = parse_book_info(vault)
-    output_dir_str = args.output_dir or book_info["output_dir"]
-    if not output_dir_str:
-        sys.exit("ERROR: no output directory given — set output_dir in Book Info.md or pass --output-dir.")
-    output_dir = Path(output_dir_str).expanduser().resolve()
-
-    trim_size = book_info.get("trim_size") or "5.25in 8in"
-    running_header = book_info.get("running_header") or book_info["title"].upper()
-
-    timestamp = datetime.now().strftime("%Y%m%d%H%M")
-    output = (output_dir / f"{book_info['title']}_{timestamp}.pdf").resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-
-    print("Assembling manuscript...")
-    doc_html, chapter_titles = build_html(vault, book_info)
-
-    print("Rendering PDF (weasyprint)...")
-    weasyprint.HTML(string=doc_html, base_url=str(vault)).write_pdf(
-        str(output), stylesheets=[weasyprint.CSS(string=build_css(trim_size, book_info["author"], running_header))]
-    )
-
-    print("Removing running header from each chapter's opening page...")
-    blank_chapter_opening_headers(output, chapter_titles)
-
-    print(f"Done. Written: {output}")
+    build_pdf(args.vault, args.output_dir)
 
 
 def main(argv=None) -> None:

@@ -1,4 +1,5 @@
-"""Extract an uploaded vault zip without trusting anything in it.
+"""Unpack an uploaded vault (a zip, or a folder sent file by file) without
+trusting anything in it.
 
 Rejects absolute paths, '..' (zip-slip), symlinks and device files, and
 caps the file count and the real (not header-claimed) uncompressed size,
@@ -59,6 +60,29 @@ def extract(zip_path: Path, dest: Path, *, max_bytes: int, max_files: int) -> No
                         out.write(chunk)
             except (zipfile.BadZipFile, RuntimeError, NotImplementedError) as e:
                 raise UploadError(f"Couldn't read {info.filename!r} from the zip ({e}).") from None
+
+
+def save_files(files, dest: Path, *, max_bytes: int, max_files: int) -> None:
+    """Save a picked folder's files (werkzeug FileStorage objects whose
+    filename is the browser's relative path, e.g. "My Book/Manuscript/x.md")."""
+    if len(files) > max_files:
+        raise UploadError(f"The folder has more than {max_files} files.")
+    dest = dest.resolve()
+    written = 0
+    for f in files:
+        rel = _member_path(f.filename or "")
+        if not rel.parts:
+            continue
+        target = (dest / rel).resolve()
+        if not target.is_relative_to(dest) or target == dest:
+            raise UploadError(f"The folder contains an unsafe path ({f.filename!r}).")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, "wb") as out:
+            while chunk := f.stream.read(64 * 1024):
+                written += len(chunk)
+                if written > max_bytes:
+                    raise UploadError(f"The vault is larger than {max_bytes // 2**20} MB.")
+                out.write(chunk)
 
 
 def find_vault_root(root: Path, max_depth: int = 3) -> Path:

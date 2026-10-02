@@ -34,7 +34,7 @@ LockPersonality=yes
 IPAddressAllow=localhost
 IPAddressDeny=any
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-MemoryMax=1G
+MemoryMax=2G   # WeasyPrint needs room for a full-length novel's PDF
 TasksMax=64
 
 [Install]

@@ -14,13 +14,14 @@ from pathlib import Path
 import pytest
 
 from obsidian_book import BookError, build_epub
-from webapp.app import create_app
+from webapp.app import create_app, pdf_available
 from webapp.jobs import Limits
 from webapp.safezip import UploadError, extract, find_vault_root
 
 REPO = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO / "vault-template"
 needs_pandoc = pytest.mark.skipif(shutil.which("pandoc") is None, reason="pandoc not installed")
+needs_pdf = pytest.mark.skipif(not pdf_available(), reason="weasyprint/pymupdf not installed")
 
 PNG_1PX = bytes.fromhex(
     "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de"
@@ -125,7 +126,7 @@ def wait_for(client, url, timeout=60):
     deadline = time.time() + timeout
     while time.time() < deadline:
         page = client.get(url).get_data(as_text=True)
-        if "Waiting in line" not in page and "Building your EPUB" not in page:
+        if "Waiting in line" not in page and "Building your" not in page:
             return page
         time.sleep(0.2)
     raise AssertionError("job never finished")
@@ -135,7 +136,7 @@ def test_home_lists_all_tools(client):
     page = client.get("/").get_data(as_text=True)
     for name in ("Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Markdown", "EPUB → Obsidian"):
         assert name in page
-    assert page.count("Coming soon") == 4
+    assert page.count("Coming soon") == (3 if pdf_available() else 4)
 
 
 def test_starter_vault_download(client):
@@ -155,6 +156,64 @@ def test_upload_converts_and_downloads(client):
     epub = client.get(job_url + "/download")
     assert epub.status_code == 200
     assert zipfile.ZipFile(io.BytesIO(epub.data)).read("mimetype") == b"application/epub+zip"
+
+
+def folder_parts(d: Path, prefix: str = "My Book") -> list:
+    """The multipart fields the folder picker's script sends."""
+    return [(io.BytesIO(f.read_bytes()), f"{prefix}/{f.relative_to(d).as_posix()}")
+            for f in d.rglob("*") if f.is_file()]
+
+
+@needs_pandoc
+def test_folder_upload_converts(client):
+    resp = client.post("/epub", data={"files": folder_parts(TEMPLATE)}, content_type="multipart/form-data")
+    assert resp.status_code == 303
+    assert "Your EPUB is ready" in wait_for(client, resp.headers["Location"])
+
+
+@pytest.mark.parametrize("name", ["../evil.md", "/tmp/evil.md", "My Book/../../evil.md"])
+def test_folder_upload_rejects_unsafe_paths(client, tmp_path, name):
+    resp = client.post("/epub", data={"files": [(io.BytesIO(b"x"), name)]}, content_type="multipart/form-data")
+    assert resp.status_code == 400
+    assert "unsafe path" in resp.get_data(as_text=True)
+
+
+@needs_pdf
+def test_pdf_upload_converts_and_downloads(client):
+    resp = client.post("/pdf", data={"files": folder_parts(TEMPLATE)}, content_type="multipart/form-data")
+    job_url = resp.headers["Location"]
+    page = wait_for(client, job_url, timeout=120)
+    assert "Your PDF is ready" in page, page
+    pdf = client.get(job_url + "/download")
+    assert pdf.mimetype == "application/pdf" and pdf.data.startswith(b"%PDF")
+
+
+@needs_pdf
+def test_pdf_fetcher_only_reads_inside_vault(tmp_path):
+    import pymupdf
+    import weasyprint
+    from obsidian_book.pdf import _vault_only_fetcher
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "in.png").write_bytes(PNG_1PX)
+    (tmp_path / "out.png").write_bytes(PNG_1PX)
+    html = (f'<img src="{(vault / "in.png").as_uri()}"><img src="{(tmp_path / "out.png").as_uri()}">'
+            f'<img src="http://example.com/x.png">')
+    pdf = weasyprint.HTML(string=html, base_url=str(vault),
+                          url_fetcher=_vault_only_fetcher(vault)).write_pdf()
+    assert len(pymupdf.open(stream=pdf, filetype="pdf")[0].get_images()) == 1
+
+
+@needs_pdf
+@pytest.mark.parametrize("field", ['pov_signs_dir: "/etc"', 'pov_signs_dir: "../x"', 'trim_size: "5in; } x {"'])
+def test_untrusted_pdf_rejects_bad_settings(tmp_path, field):
+    from obsidian_book.pdf import build_pdf
+    v = make_vault(tmp_path)
+    info = v / "Book Info.md"
+    key = field.split(":")[0]
+    info.write_text(info.read_text().replace(f'{key}: ""', field))
+    with pytest.raises(BookError, match=key):
+        build_pdf(v, tmp_path / "out", untrusted=True)
 
 
 def test_upload_bad_zip_reports_error(client):

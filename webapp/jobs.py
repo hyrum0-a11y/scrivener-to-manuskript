@@ -28,8 +28,8 @@ JOB_ID_LEN = 32  # hex chars
 class Limits:
     max_unzipped_bytes: int = 200 * 2**20
     max_files: int = 5000
-    cpu_seconds: int = 120
-    wall_seconds: int = 300
+    cpu_seconds: int = 300   # a long novel's PDF takes a while in WeasyPrint
+    wall_seconds: int = 600
     max_output_bytes: int = 200 * 2**20
     max_queued: int = 20
     keep_seconds: int = 3600
@@ -52,15 +52,20 @@ class JobQueue:
 
     # --- public -----------------------------------------------------------
 
-    def submit(self, save_upload) -> str:
-        """save_upload(path) writes the uploaded zip to path."""
+    def submit(self, fmt: str, save_upload) -> str:
+        """save_upload(job_dir) writes the upload into job_dir, as upload.zip
+        or a vault/ folder. If it raises, the job is discarded."""
         if self._queue.qsize() >= self.limits.max_queued:
             raise QueueFull()
         job_id = secrets.token_hex(JOB_ID_LEN // 2)
         job_dir = self.jobs_dir / job_id
         job_dir.mkdir()
-        save_upload(job_dir / "upload.zip")
-        self._write_status(job_id, {"state": "queued", "created": time.time()})
+        try:
+            save_upload(job_dir)
+        except BaseException:
+            remove(job_dir)
+            raise
+        self._write_status(job_id, {"state": "queued", "format": fmt, "created": time.time()})
         self._queue.put(job_id)
         return job_id
 
@@ -119,7 +124,7 @@ class JobQueue:
         st = self.status(job_id) or {}
         self._write_status(job_id, {**st, "state": "running", "started": time.time()})
         lim = self.limits
-        cmd = [sys.executable, "-m", "webapp.runner", str(job_dir),
+        cmd = [sys.executable, "-m", "webapp.runner", str(job_dir), st.get("format", "epub"),
                str(lim.max_unzipped_bytes), str(lim.max_files)]
         proc = subprocess.Popen(cmd, cwd=job_dir, preexec_fn=self._limit_child,
                                 start_new_session=True, stdout=subprocess.DEVNULL,

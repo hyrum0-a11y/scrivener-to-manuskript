@@ -12,7 +12,8 @@ Debian/Ubuntu.
 
 ```sh
 apt update
-apt install -y python3 python3-venv git
+apt install -y python3 python3-venv git \
+    libpango-1.0-0 libpangoft2-1.0-0 fonts-ebgaramond fonts-linuxlibertine
 pandoc --version || true
 ```
 
@@ -69,6 +70,19 @@ Then open <https://authortools.hyrumjones.com>.
 sh /opt/authortools/app/deploy/update.sh
 ```
 
+The PDF tool (added after the first deploy) also needs the PDF libraries
+and fonts, plus the service file's new memory limit. Run once:
+
+```sh
+apt install -y libpango-1.0-0 libpangoft2-1.0-0 fonts-ebgaramond fonts-linuxlibertine
+sh /opt/authortools/app/deploy/update.sh      # installs weasyprint and pymupdf
+cp /opt/authortools/app/deploy/authortools.service /etc/systemd/system/
+systemctl daemon-reload && systemctl restart authortools
+```
+
+The home page shows the PDF tool as "Coming soon" until weasyprint and
+pymupdf are installed.
+
 ## Logs and troubleshooting
 
 - `journalctl -u authortools -f` shows the app log.
@@ -76,7 +90,7 @@ sh /opt/authortools/app/deploy/update.sh
   after a conversion finishes (and on every restart). The uploaded vault is
   deleted as soon as its conversion ends.
 - Limits (in `webapp/jobs.py`'s `Limits`): 200 MB / 5000 files unzipped,
-  120 s of CPU and 300 s wall time per conversion, 20 uploads waiting.
+  300 s of CPU and 600 s wall time per conversion, 20 uploads waiting.
   Upload size is `AUTHORTOOLS_MAX_UPLOAD_MB` in the service file plus the
   proxy's body limit; change both together.
 
@@ -87,6 +101,9 @@ sh /opt/authortools/app/deploy/update.sh
 - Each conversion runs in a child process with CPU and file-size limits,
   as the unprivileged `authortools` user, under systemd sandboxing
   (read-only system, no home directories, no outbound network).
+- PDFs are built with `build_pdf(untrusted=True)`: WeasyPrint may only load
+  files from inside the vault (no server files, no network), and
+  `pov_signs_dir` must be a folder inside the vault.
 - pandoc runs with `build_epub(untrusted=True)`: the cover must be inside
   the vault, and images or raw HTML that point at absolute paths, `..` or
   URLs are dropped. pandoc's own `--sandbox` flag is not used because it

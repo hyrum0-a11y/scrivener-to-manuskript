@@ -1,2 +1,4 @@
 flask>=3.0
 gunicorn>=22
+weasyprint>=60
+pymupdf>=1.24
