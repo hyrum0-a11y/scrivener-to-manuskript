@@ -7,12 +7,16 @@ The conversions run as free web tools at https://authortools.hyrumjones.com. The
 
 ## Layout
 - `obsidian_book/`: the converters (`epub.py`, `pdf.py`, `odt.py`) plus the `obsidian-book` CLI (`cli.py`).
+  Importers ("Bring your work in"): `from_epub.py` (any EPUB) and `from_scrivener.py` (.scriv) build a
+  `Book` that `importer.py`'s `write_vault()` lays out as a vault. Their docstrings explain the structure guessing.
   Structure comes from the vault's `Manuscript Reading Order.md`; see the docstring at the top of `epub.py`.
   Parts are optional. Chapters listed before any `# Part` heading compile with no Part page.
-- `webapp/`: Flask app (home page, `/convert` upload, job queue, `/starter-vault.zip`).
+- `webapp/`: Flask app (home page, `/convert` upload, `/import/epub` and `/import/scrivener`, job queue with a
+  `/queue` counter, `/starter-vault.zip`). Import jobs use the format name `vault`; see `runner.py`.
 - `vault-template/`: starter vault. It must always compile; CI builds it.
 - `deploy/`: server setup (`DEPLOY.md`), systemd unit, nginx/Caddy config, `update.sh`.
-- `convert.py`, `epub_to_obsidian.py`, `make_obsidian_vault.py`: older one-off migration tools.
+- `convert.py`, `epub_to_obsidian.py`, `make_obsidian_vault.py`: older one-off migration tools, superseded by
+  the importers above.
 
 ## Rules
 - Commit and push straight to `main`. No PRs, and never force-push.
@@ -23,7 +27,8 @@ The conversions run as free web tools at https://authortools.hyrumjones.com. The
 - Uploaded vaults are untrusted. Keep the hardening in place: `untrusted=True` builds (Lua filter, cover must be inside
   the vault), a locked-down WeasyPrint fetcher, zip-slip and path checks, and per-job temp dirs. pandoc `--sandbox` can't
   be used because it refuses `--css` and `--epub-cover-image`.
-- ODT isn't web-safe yet: it uses a fixed LibreOffice port and a shared `reference.odt`.
+- ODT isn't web-safe yet: it starts one shared LibreOffice on fixed port 2002, calls `sys.exit()` on bad
+  vaults, and has no `untrusted` mode. (`reference.odt` is already built per run.) The server has ~1 GB RAM.
 - `NEXT_STEPS.md` (gitignored) holds the current plan if it exists. Never commit real manuscripts or outputs.
 - Rum runs Arch Linux locally, so use pipx or pacman, not a global pip install. Keep replies compact.
 - Moon+ Reader ignores EPUB CSS. Test styling in Calibre, Apple Books or Thorium instead.

@@ -1,5 +1,6 @@
-"""authortools.hyrumjones.com: a home page listing every tool, plus one
-upload page that converts an Obsidian vault to EPUB and/or PDF.
+"""authortools.hyrumjones.com: a home page listing every tool, an upload
+page that converts an Obsidian vault to EPUB and/or PDF, and import pages
+that turn an EPUB or a Scrivener project into a vault.
 
 Run locally:   flask --app 'webapp.app:create_app()' run
 In production: gunicorn 'webapp.app:create_app()', one process; see deploy/DEPLOY.md.
@@ -12,6 +13,7 @@ Settings come from environment variables (defaults in brackets):
 
 import importlib.util
 import io
+import json
 import os
 import zipfile
 from pathlib import Path
@@ -37,6 +39,14 @@ FORMATS = {
     "pdf": {"label": "Print PDF", "hint": "with part pages, drop caps and running headers",
             "mimetype": "application/pdf"},
 }
+DOWNLOAD_MIMETYPES = {**{k: v["mimetype"] for k, v in FORMATS.items()}, "vault": "application/zip"}
+
+# "Bring your work in" tools: each turns an upload into a vault.
+IMPORTS = {
+    "epub": {"name": "EPUB → Obsidian", "noun": "EPUB"},
+    "scrivener": {"name": "Scrivener → Obsidian", "noun": "Scrivener project"},
+}
+MAX_FIELD = 200  # title/author box length
 COVER_MIMETYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                    ".gif": "image/gif", ".webp": "image/webp"}
 
@@ -62,9 +72,10 @@ def tool_groups() -> list:
              "desc": "An editable manuscript you can open in LibreOffice or Word."},
         ]},
         {"title": "Bring your work in", "tools": [
-            {"name": "Scrivener → Markdown", "href": None,
-             "desc": "Move a Scrivener 3 project into plain Markdown files (and a Manuskript project)."},
-            {"name": "EPUB → Obsidian", "href": None,
+            {"name": IMPORTS["scrivener"]["name"], "href": url_for("import_form", source="scrivener"),
+             "desc": "Move a Scrivener project into an Obsidian vault, with its parts, chapters "
+                     "and scenes, ready to keep writing and to convert."},
+            {"name": IMPORTS["epub"]["name"], "href": url_for("import_form", source="epub"),
              "desc": "Pull a published e-book back into a vault you can keep writing in."},
         ]},
     ]
@@ -127,21 +138,66 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
             return form(formats, "The converter is busy right now. Try again in a few minutes.", 503)
         return redirect(url_for("job_page", job_id=job_id), code=303)
 
+    def import_page(source, error=None, status=200, title="", author=""):
+        return render_template("import.html", source=source, tool=IMPORTS[source], max_mb=max_mb,
+                               error=error, title=title, author=author, queue=jobs.counts()), status
+
+    @app.get("/import/<any(epub, scrivener):source>")
+    def import_form(source):
+        return import_page(source)
+
+    @app.post("/import/<any(epub, scrivener):source>")
+    def import_upload(source):
+        title = request.form.get("title", "").strip()[:MAX_FIELD]
+        author = request.form.get("author", "").strip()[:MAX_FIELD]
+        folder = [f for f in request.files.getlist("files") if f.filename]
+        upload = request.files.get("book")
+        options = json.dumps({"source": source, "title": title, "author": author})
+        page = lambda msg, code: import_page(source, msg, code, title, author)
+        if source == "epub":
+            if not (upload and upload.filename):
+                return page("Choose your .epub file first.", 400)
+            if not upload.filename.lower().endswith(".epub"):
+                return page("That isn't an .epub file.", 400)
+            def save(job_dir):
+                upload.save(job_dir / "upload.epub")
+                (job_dir / "options.json").write_text(options, encoding="utf-8")
+        elif folder:
+            def save(job_dir):
+                save_files(folder, job_dir / "vault", max_bytes=jobs.limits.max_unzipped_bytes,
+                           max_files=MAX_FOLDER_FILES)
+                (job_dir / "options.json").write_text(options, encoding="utf-8")
+        elif upload and upload.filename:
+            if not upload.filename.lower().endswith(".zip"):
+                return page("Upload a .zip of your .scriv folder, or pick the folder itself.", 400)
+            def save(job_dir):
+                upload.save(job_dir / "upload.zip")
+                (job_dir / "options.json").write_text(options, encoding="utf-8")
+        else:
+            return page("Pick your .scriv folder (or a .zip of it) first.", 400)
+        try:
+            job_id = jobs.submit(["vault"], save, extra={"source": source})
+        except UploadError as e:
+            return page(str(e), 400)
+        except QueueFull:
+            return page("The converter is busy right now. Try again in a few minutes.", 503)
+        return redirect(url_for("job_page", job_id=job_id), code=303)
+
     @app.get("/jobs/<job_id>")
     def job_page(job_id):
         st = jobs.status(job_id)
         if st is None:
             abort(404)
-        return render_template("job.html", job_id=job_id, st=st, formats=FORMATS,
+        return render_template("job.html", job_id=job_id, st=st, formats=FORMATS, imports=IMPORTS,
                                position=jobs.position(job_id), queue=jobs.counts(),
                                keep_minutes=jobs.limits.keep_seconds // 60)
 
-    @app.get("/jobs/<job_id>/<any(epub, pdf):fmt>")
+    @app.get("/jobs/<job_id>/<any(epub, pdf, vault):fmt>")
     def job_download(job_id, fmt):
         path = jobs.output_path(job_id, fmt)
         if path is None:
             abort(404)
-        return send_file(path, mimetype=FORMATS[fmt]["mimetype"], as_attachment=True,
+        return send_file(path, mimetype=DOWNLOAD_MIMETYPES[fmt], as_attachment=True,
                          download_name=path.name)
 
     @app.get("/jobs/<job_id>/cover")
@@ -173,7 +229,11 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
 
     @app.errorhandler(413)
     def too_large(_):
-        return form(error=f"That upload is over the {max_mb} MB limit (or has too many files).", status=413)
+        msg = f"That upload is over the {max_mb} MB limit (or has too many files)."
+        source = request.path.rstrip("/").rsplit("/", 1)[-1]
+        if request.path.startswith("/import/") and source in IMPORTS:
+            return import_page(source, msg, 413)
+        return form(error=msg, status=413)
 
     @app.errorhandler(404)
     def not_found(_):

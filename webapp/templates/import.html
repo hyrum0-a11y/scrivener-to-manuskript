@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ tool.name }} · Author Tools{% endblock %}
+{% block main %}
+<p class="back"><a href="{{ url_for('home') }}">← All tools</a></p>
+<h1>{{ tool.name }}</h1>
+{% if source == 'epub' %}
+<p>Upload an EPUB and get back an Obsidian vault: front matter, parts, chapters and scenes, each in its own note, with the cover and book details filled in. Open it in Obsidian, keep writing, and convert it back whenever you like.</p>
+{% else %}
+<p>Upload a Scrivener project and get back an Obsidian vault with the same parts, chapters and scenes, plus your ebook front and back matter and cover. Open it in Obsidian, keep writing, and convert it to EPUB or PDF here.</p>
+{% endif %}
+
+<p class="error" role="alert" id="error" {% if not error %}hidden{% endif %}>{{ error or '' }}</p>
+
+<form class="card" id="upload" method="post" action="{{ url_for('import_upload', source=source) }}"
+      enctype="multipart/form-data" data-max-mb="{{ max_mb }}"
+      {% if source == 'scrivener' %}data-only="\.scrivx$|/Settings/compile\.xml$|/Files/(Data/[^/]+/content\.(rtf|png|jpe?g|gif|webp)|Docs/[^/]+\.(rtf|png|jpe?g|gif|webp))$"{% endif %}>
+  {% if source == 'epub' %}
+  <fieldset>
+    <legend>Choose your EPUB</legend>
+    <input id="vault" name="book" type="file" accept=".epub,application/epub+zip">
+  </fieldset>
+  {% else %}
+  <fieldset>
+    <legend>1. Pick your .scriv folder</legend>
+    <input id="folder" name="files" type="file" webkitdirectory multiple>
+    <p class="muted small" id="folder-summary">Only the project file, your texts and images are sent; snapshots and research files are skipped.</p>
+    <details>
+      <summary>Or upload a .zip of it (easiest on a Mac)</summary>
+      <input id="vault" name="book" type="file" accept=".zip,application/zip">
+      <p class="muted small">In Finder, right-click the project and choose <em>Compress</em>.</p>
+    </details>
+  </fieldset>
+  <fieldset>
+    <legend>2. Book details (optional)</legend>
+    <label class="field">Title <input name="title" value="{{ title }}" maxlength="200" placeholder="The project's name"></label>
+    <label class="field">Author <input name="author" value="{{ author }}" maxlength="200" placeholder="From Scrivener's compile settings"></label>
+  </fieldset>
+  {% endif %}
+
+  <button type="submit" id="submit">Make my vault</button>
+  {% include "_queue.html" %}
+  <p class="muted small">Up to {{ max_mb }} MB.</p>
+</form>
+
+<h2>What you'll get</h2>
+<ul>
+  <li>A .zip holding your vault. Unzip it and open the folder in Obsidian (<em>Open folder as vault</em>).</li>
+  <li><code>Book Info.md</code> with the title, author and cover. Check them before converting.</li>
+  <li><code>Manuscript Reading Order.md</code>, which sets the order of everything. Edit it to move chapters around.</li>
+  {% if source == 'epub' %}
+  <li>Scenes are split at scene breaks (<code>* * *</code>, <code>#</code>, ornaments). Images other than the cover aren't brought over.</li>
+  {% else %}
+  <li>Items unticked for <em>Include in Compile</em> are left out, as are research, character and template notes.</li>
+  {% endif %}
+</ul>
+{% if source == 'scrivener' %}<script src="{{ url_for('static', filename='upload.js') }}"></script>{% endif %}
+<script src="{{ url_for('static', filename='queue.js') }}"></script>
+{% endblock %}

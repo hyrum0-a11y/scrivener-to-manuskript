@@ -1,17 +1,24 @@
 {% extends "base.html" %}
 {% set names = st.formats | map('upper') | join(' and ') %}
+{% set tool = imports.get(st.source) if st.source else None %}
+{% set again = url_for('import_form', source=st.source) if tool else url_for('convert_form', fmt=st.formats) %}
 {% block title %}Your book · Author Tools{% endblock %}
 {% block head %}{% if st.state in ('queued', 'running') %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block main %}
-<p class="back"><a href="{{ url_for('convert_form', fmt=st.formats) }}">← Convert another</a></p>
+<p class="back"><a href="{{ again }}">← {{ 'Import another' if tool else 'Convert another' }}</a></p>
 
 {% if st.state == 'queued' %}
   <h1>Waiting in line…</h1>
   <p>{% if position > 1 %}{{ position - 1 }} book{{ '' if position == 2 else 's' }} ahead of yours. {% endif %}This page updates by itself.</p>
   {% include "_queue.html" %}
 {% elif st.state == 'running' %}
+  {% if tool %}
+  <h1>Turning your {{ tool.noun }} into a vault…</h1>
+  <p>A full novel takes a minute or two. This page updates by itself.</p>
+  {% else %}
   <h1>Checking and building your {{ names }}…</h1>
   <p>An EPUB takes seconds; a PDF of a full novel can take a minute or two. This page updates by itself.</p>
+  {% endif %}
   {% if queue.waiting %}<p class="queue muted small">{{ queue.waiting }} more book{{ '' if queue.waiting == 1 else 's' }} waiting after yours.</p>{% endif %}
 {% else %}
   {% if st.book %}
@@ -29,7 +36,7 @@
       {% if st.files %}
       <p class="downloads">
         {% for fmt in st.formats if st.files[fmt] %}
-        <a class="button" href="{{ url_for('job_download', job_id=job_id, fmt=fmt) }}">Download {{ fmt | upper }}</a>
+        <a class="button" href="{{ url_for('job_download', job_id=job_id, fmt=fmt) }}">Download {{ 'vault (.zip)' if fmt == 'vault' else fmt | upper }}</a>
         {% endfor %}
       </p>
       <p class="muted small">Files are deleted from the server after {{ keep_minutes }} minutes.</p>
@@ -58,9 +65,17 @@
   {% elif st.book %}
   <p class="ok">✓ Book check passed: every note in the reading order was found.</p>
   {% endif %}
+  {% if tool and st.state == 'done' %}
+  <h2>Next steps</h2>
+  <ol>
+    <li>Unzip the vault and open the folder in Obsidian (<em>Open folder as vault</em>).</li>
+    <li>Check <code>Book Info.md</code> (title, author, publisher) and skim <code>Manuscript Reading Order.md</code>.</li>
+    <li>When you're ready, <a href="{{ url_for('convert_form') }}">convert it to EPUB or PDF</a>.</li>
+  </ol>
+  {% endif %}
 
   {% if st.state == 'failed' %}
-  <p><a href="{{ url_for('convert_form', fmt=st.formats) }}">Fix the vault and try again</a></p>
+  <p><a href="{{ again }}">{{ 'Try another file' if tool else 'Fix the vault and try again' }}</a></p>
   {% endif %}
   {% if st.log %}
   <details><summary>Build notes</summary><pre>{{ st.log }}</pre></details>

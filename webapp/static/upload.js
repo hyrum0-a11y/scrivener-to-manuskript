@@ -1,5 +1,6 @@
-// Sends a picked vault folder file by file (with each file's path inside
-// the folder), skipping hidden folders like .obsidian and .git. Without
+// Sends a picked folder file by file (with each file's path inside the
+// folder), skipping hidden folders like .obsidian and .git, and, if the form
+// has data-only="<regex>", every file whose path doesn't match it. Without
 // JavaScript the form still posts normally.
 (function () {
   const form = document.getElementById("upload");
@@ -11,7 +12,9 @@
   const label = button.textContent;
   const maxBytes = Number(form.dataset.maxMb) * 1024 * 1024;
 
-  const wanted = (f) => !f.webkitRelativePath.split("/").some((part) => part.startsWith("."));
+  const only = form.dataset.only ? new RegExp(form.dataset.only, "i") : null;
+  const wanted = (f) => !f.webkitRelativePath.split("/").some((part) => part.startsWith(".")) &&
+    (!only || only.test(f.webkitRelativePath));
   const picked = () => Array.from(folder.files).filter(wanted);
 
   function showError(text) {
@@ -45,7 +48,9 @@
       return;
     }
     const data = new FormData();
-    for (const box of form.querySelectorAll("input[name=formats]:checked")) data.append("formats", box.value);
+    for (const [key, value] of new FormData(form)) {
+      if (typeof value === "string") data.append(key, value);  // checkboxes and text boxes, not files
+    }
     for (const f of files) data.append("files", f, f.webkitRelativePath);
     button.disabled = true;
     button.textContent = "Uploading…";

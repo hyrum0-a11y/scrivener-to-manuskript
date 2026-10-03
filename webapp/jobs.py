@@ -54,9 +54,10 @@ class JobQueue:
 
     # --- public -----------------------------------------------------------
 
-    def submit(self, formats: list, save_upload) -> str:
-        """save_upload(job_dir) writes the upload into job_dir, as upload.zip
-        or a vault/ folder. If it raises, the job is discarded."""
+    def submit(self, formats: list, save_upload, extra: dict | None = None) -> str:
+        """save_upload(job_dir) writes the upload into job_dir (upload.zip,
+        upload.epub or a vault/ folder). If it raises, the job is discarded.
+        extra is stored in the job's status (e.g. {"source": "epub"})."""
         if self._queue.qsize() >= self.limits.max_queued:
             raise QueueFull()
         job_id = secrets.token_hex(JOB_ID_LEN // 2)
@@ -67,7 +68,8 @@ class JobQueue:
         except BaseException:
             remove(job_dir)
             raise
-        self._write_status(job_id, {"state": "queued", "formats": formats, "created": time.time()})
+        self._write_status(job_id, {**(extra or {}), "state": "queued", "formats": formats,
+                                    "created": time.time()})
         self._queue.put(job_id)
         return job_id
 
@@ -170,7 +172,9 @@ class JobQueue:
     def _finish(self, job_id: str, result: dict) -> None:
         job_dir = self.jobs_dir / job_id
         remove(job_dir / "vault")
-        (job_dir / "upload.zip").unlink(missing_ok=True)
+        remove(job_dir / "built")
+        for name in ("upload.zip", "upload.epub", "options.json"):
+            (job_dir / name).unlink(missing_ok=True)
         st = self.status(job_id) or {}
         st.update(state="done" if result.get("ok") else "failed", finished=time.time(),
                   error=result.get("error"), log=result.get("log", ""), book=result.get("book"),

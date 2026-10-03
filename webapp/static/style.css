@@ -95,3 +95,6 @@ label.check .muted { font-size: .9rem; }
 .ok { color: #2e7d32; }
 @media (prefers-color-scheme: dark) { .ok { color: #8fd694; } }
 .queue { margin-top: .6em; }
+label.field { display: grid; gap: 4px; font-weight: 600; }
+label.field input { font: inherit; font-weight: normal; padding: 8px 10px; border: 1px solid var(--line);
+                    border-radius: 6px; background: var(--card); color: var(--fg); max-width: 28rem; }

@@ -183,10 +183,11 @@ def folder_parts(d: Path, prefix: str = "My Book") -> list:
 
 def test_home_lists_all_tools_in_groups(client):
     page = client.get("/").get_data(as_text=True)
-    for name in ("Starter vault", 'href="/starter-vault.zip"', "Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Markdown", "EPUB → Obsidian",
+    for name in ("Starter vault", 'href="/starter-vault.zip"', "Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Obsidian", "EPUB → Obsidian",
+                 'href="/import/scrivener"', 'href="/import/epub"',
                  "Convert your Obsidian book", "Bring your work in", "Pick your vault"):
         assert name in page
-    assert page.count("Coming soon") == (3 if pdf_available() else 4)
+    assert page.count("Coming soon") == (1 if pdf_available() else 2)
 
 
 def test_old_addresses_redirect_and_preselect(client):

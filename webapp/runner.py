@@ -1,15 +1,21 @@
 """One conversion job, run as a child process with CPU and file-size limits.
 
-    python -m webapp.runner <job_dir> <epub,pdf> <max_unzipped_bytes> <max_files>
+    python -m webapp.runner <job_dir> <epub,pdf | vault> <max_unzipped_bytes> <max_files>
 
-Reads <job_dir>/upload.zip (or a folder already saved to <job_dir>/vault),
-checks the vault, then builds each requested format into <job_dir>/out/.
+Converting: reads <job_dir>/upload.zip (or a folder already saved to
+<job_dir>/vault), checks the vault, then builds each requested format into
+<job_dir>/out/.
+
+Importing ("vault"): <job_dir>/options.json says {"source": "epub" |
+"scrivener", "title", "author"}. Turns upload.epub, or the Scrivener project
+in upload.zip / vault/, into a vault, checks it the same way, and zips it
+into <job_dir>/out/.
 The outcome goes to <job_dir>/result.json:
 
     {"ok": bool, "error": str|None, "book": {...}, "issues": [...],
      "files": {"epub": name}, "errors": {"pdf": message}, "cover": name|None}
 
-The vault is deleted before exiting, whatever happens.
+Uploads and working folders are deleted before exiting, whatever happens.
 """
 
 import contextlib
@@ -18,11 +24,13 @@ import json
 import re
 import shutil
 import sys
+import zipfile
 from pathlib import Path
 
 from obsidian_book import BookError, build_epub
 from obsidian_book.epub import (check_vault, index_vault_files, load_vault, parse_reading_order,
                                 resolve_cover, strip_frontmatter)
+from obsidian_book.importer import safe_name, write_vault
 from webapp.safezip import UploadError, extract, find_vault_root, remove
 
 COVER_TYPES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}  # not .svg: it can carry script
@@ -72,6 +80,68 @@ def copy_cover(vault: Path, book_info: dict, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(cover, out_dir / name)
     return name
+
+
+def zip_vault(vault: Path, dest: Path) -> None:
+    """Zip the vault folder (with the folder itself as the zip's top level)."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(vault.rglob("*")):
+            if f.is_file():
+                zf.write(f, Path(vault.name) / f.relative_to(vault))
+
+
+def run_import(job_dir: Path, max_bytes: int, max_files: int) -> dict:
+    upload, src_dir, built, out_dir = (job_dir / "upload.zip", job_dir / "vault", job_dir / "built",
+                                       job_dir / "out")
+    epub_upload = job_dir / "upload.epub"
+    paths = [str(p.resolve()) for p in (src_dir, built, epub_upload)]
+
+    def scrub(text: str) -> str:  # don't show the server's job paths
+        for path in paths:
+            text = text.replace(path + "/", "").replace(path, "your upload")
+        return text
+
+    result = {"ok": False, "error": None, "book": None, "issues": [], "files": {}, "errors": {},
+              "cover": None, "log": ""}
+    try:
+        opts = json.loads((job_dir / "options.json").read_text(encoding="utf-8"))
+        log = io.StringIO()
+        with contextlib.redirect_stdout(log):
+            if opts.get("source") == "epub":
+                from obsidian_book.from_epub import build_book
+                book = build_book(epub_upload, max_bytes)
+            else:
+                from obsidian_book.from_scrivener import build_book, find_scrivx
+                if upload.exists():
+                    extract(upload, src_dir, max_bytes=max_bytes, max_files=max_files)
+                book = build_book(find_scrivx(src_dir), opts.get("title", ""), opts.get("author", ""))
+            vault = write_vault(book, built / (safe_name(book.title, 60) or "My Book"))
+        vault, book_info = load_vault(vault)
+        report = io.StringIO()
+        with contextlib.redirect_stdout(report):
+            check_vault(vault, book_info)
+        result["issues"] = parse_issues(scrub(report.getvalue()))
+        result["book"] = book_details(vault, book_info)
+        result["cover"] = copy_cover(vault, book_info, out_dir)
+        name = f"{vault.name} (Obsidian vault).zip"
+        zip_vault(vault, out_dir / name)
+        result["files"]["vault"] = name
+        result["log"] = scrub(log.getvalue())
+        result["ok"] = True
+        return result
+    except (UploadError, BookError) as e:
+        result["error"] = scrub(str(e))
+        return result
+    except Exception as e:
+        result["error"] = (f"Something in the upload couldn't be read "
+                           f"({type(e).__name__}: {scrub(str(e))[:300]}).")
+        return result
+    finally:
+        remove(src_dir)
+        remove(built)
+        upload.unlink(missing_ok=True)
+        epub_upload.unlink(missing_ok=True)
 
 
 def run(job_dir: Path, formats: list, max_bytes: int, max_files: int) -> dict:
@@ -128,7 +198,9 @@ def run(job_dir: Path, formats: list, max_bytes: int, max_files: int) -> dict:
 
 def main() -> None:
     job_dir = Path(sys.argv[1])
-    result = run(job_dir, sys.argv[2].split(","), int(sys.argv[3]), int(sys.argv[4]))
+    formats, max_bytes, max_files = sys.argv[2].split(","), int(sys.argv[3]), int(sys.argv[4])
+    result = (run_import(job_dir, max_bytes, max_files) if formats == ["vault"]
+              else run(job_dir, formats, max_bytes, max_files))
     (job_dir / "result.json").write_text(json.dumps(result), encoding="utf-8")
 
 
