@@ -9,8 +9,7 @@
 
 {% if st.state == 'queued' %}
   <h1>Waiting in line…</h1>
-  <p>{% if position > 1 %}{{ position - 1 }} book{{ '' if position == 2 else 's' }} ahead of yours. {% endif %}This page updates by itself.</p>
-  {% include "_queue.html" %}
+  <p>{% if position > 1 %}{{ position - 1 }} book{{ '' if position == 2 else 's' }} ahead of yours, {% endif %}{{ wait }} until it starts. This page updates by itself.</p>
 {% elif st.state == 'running' %}
   {% if tool %}
   <h1>Turning your {{ tool.noun }} into a vault…</h1>
@@ -19,7 +18,7 @@
   <h1>Checking and building your {{ names }}…</h1>
   <p>An EPUB takes seconds; a PDF of a full novel can take a minute or two. This page updates by itself.</p>
   {% endif %}
-  {% if queue.waiting %}<p class="queue muted small">{{ queue.waiting }} more book{{ '' if queue.waiting == 1 else 's' }} waiting after yours.</p>{% endif %}
+  {% if site_status.waiting %}<p class="queue muted small">{{ site_status.waiting }} more book{{ '' if site_status.waiting == 1 else 's' }} waiting after yours.</p>{% endif %}
 {% else %}
   {% if st.book %}
   <section class="book card">

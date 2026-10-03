@@ -98,3 +98,31 @@ label.check .muted { font-size: .9rem; }
 label.field { display: grid; gap: 4px; font-weight: 600; }
 label.field input { font: inherit; font-weight: normal; padding: 8px 10px; border: 1px solid var(--line);
                     border-radius: 6px; background: var(--card); color: var(--fg); max-width: 28rem; }
+/* Converter status: header badge, /status page and chart */
+:root { --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; }
+header.site { flex-wrap: wrap; }
+.status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .85rem; }
+.status-badge a { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none;
+                  white-space: nowrap; }
+.status-badge a:hover { color: var(--accent); }
+.status-badge .refresh { padding: 2px 8px; font-size: .9rem; line-height: 1.4; background: transparent;
+                         color: var(--muted); border: 1px solid var(--line); }
+.dot { display: inline-block; width: .6em; height: .6em; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.free { background: var(--good); }
+.dot.busy { background: var(--warning); }
+.dot.full { background: var(--critical); }
+.now-label { display: flex; align-items: center; gap: 8px; margin-top: 0; }
+ul.plain { list-style: none; padding: 0; margin: 0 0 .8em; }
+.chart { margin: 0 0 1em; }
+.chart figcaption { font-weight: 600; font-size: .95rem; margin-bottom: 6px; }
+.chart-scroll { overflow-x: auto; }
+.chart svg { width: 100%; min-width: 320px; height: auto; display: block; }
+.chart .mark { fill: var(--accent); }
+.chart .hit { fill: transparent; }
+.chart .bar:hover .mark { opacity: .8; }
+.chart .grid { stroke: var(--line); stroke-dasharray: 3 3; }
+.chart .baseline { stroke: var(--muted); }
+.chart .axis { fill: var(--muted); font-size: 11px; }
+table.data { border-collapse: collapse; width: 100%; font-size: .92rem; margin: .4em 0; }
+table.data th, table.data td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.data th { color: var(--muted); font-weight: 600; }

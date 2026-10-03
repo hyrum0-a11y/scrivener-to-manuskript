@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Converter status · Author Tools{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="30">{% endblock %}
+{% block main %}
+<p class="back"><a href="{{ url_for('home') }}">← All tools</a></p>
+<h1>Converter status</h1>
+<p class="muted">Conversions and imports run one at a time, in the order they arrive. This page shows how busy that line is. It never shows book titles or names.</p>
+
+<section class="card now">
+  <p class="now-label"><span class="dot {{ site_status.level }}" aria-hidden="true"></span>
+    <strong>{{ site_status.label }}</strong></p>
+  {% if site_status.running_jobs or site_status.waiting_jobs %}
+  <ul class="plain">
+    {% for j in site_status.running_jobs %}
+    <li>Converting: {{ j.type }}, running for {{ j.seconds }} s</li>
+    {% endfor %}
+    {% for t in site_status.waiting_jobs %}
+    <li class="muted">Waiting {{ loop.index }}: {{ t }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted small">Nothing in line. A new upload starts right away.</p>
+  {% endif %}
+  <p class="small"><a class="button" href="{{ url_for('status_page') }}">Update</a>
+    <span class="muted">This page also updates by itself every 30 seconds.</span></p>
+</section>
+
+<h2>Last 24 hours</h2>
+{% if stats.total %}
+<p>{{ stats.total }} job{{ '' if stats.total == 1 else 's' }} finished{% if stats.failed %}, {{ stats.failed }} of them failed{% endif %}.</p>
+
+<figure class="chart">
+  <figcaption>Jobs finished per hour</figcaption>
+  <div class="chart-scroll">
+    <svg viewBox="-28 -8 {{ chart.width + 36 }} {{ chart.height + 30 }}" role="img"
+         aria-label="Bar chart of jobs finished per hour over the last 24 hours. The table below has the numbers.">
+      <line class="grid" stroke="#e4dfd8" stroke-dasharray="3 3" x1="0" x2="{{ chart.width }}" y1="0" y2="0"/>
+      <text class="axis" fill="#6b6560" font-size="11" x="-6" y="4" text-anchor="end">{{ chart.top }}</text>
+      <line class="baseline" stroke="#6b6560" x1="0" x2="{{ chart.width }}" y1="{{ chart.height }}" y2="{{ chart.height }}"/>
+      <text class="axis" fill="#6b6560" font-size="11" x="-6" y="{{ chart.height + 4 }}" text-anchor="end">0</text>
+      {% for b in chart.bars %}
+      <g class="bar">
+        <title>{{ b.tip }}</title>
+        <rect class="hit" fill="transparent" x="{{ b.x }}" y="0" width="{{ b.w }}" height="{{ chart.height }}"/>
+        {% if b.path %}<path class="mark" fill="#6a4c93" d="{{ b.path }}"/>{% endif %}
+      </g>
+      {% endfor %}
+      <text class="axis" fill="#6b6560" font-size="11" x="0" y="{{ chart.height + 18 }}">24 hours ago</text>
+      <text class="axis" fill="#6b6560" font-size="11" x="{{ chart.width / 2 }}" y="{{ chart.height + 18 }}" text-anchor="middle">12 hours ago</text>
+      <text class="axis" fill="#6b6560" font-size="11" x="{{ chart.width }}" y="{{ chart.height + 18 }}" text-anchor="end">now</text>
+    </svg>
+  </div>
+</figure>
+
+<details>
+  <summary>Show as a table</summary>
+  <table class="data">
+    <thead><tr><th>When</th><th>Jobs</th><th>Failed</th></tr></thead>
+    <tbody>
+      {% for b in chart.bars | reverse if b.total %}
+      <tr><td>{{ b.when | capitalize }}</td><td>{{ b.total }}</td><td>{{ b.failed }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+
+<h2>By type</h2>
+<table class="data">
+  <thead><tr><th>Type</th><th>Jobs</th><th>Failed</th><th>Typical time</th></tr></thead>
+  <tbody>
+    {% for t in stats.by_type %}
+    <tr><td>{{ t.type }}</td><td>{{ t.count }}</td><td>{{ t.failed }}</td>
+        <td>{% if t.typical < 60 %}{{ t.typical }} s{% else %}{{ (t.typical / 60) | round(1) }} min{% endif %}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="muted small">Wait estimates use these typical times. They reset when the server restarts.</p>
+{% else %}
+<p class="muted">No jobs in the last 24 hours (or since the server last restarted).</p>
+{% endif %}
+{% endblock %}

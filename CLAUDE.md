@@ -11,8 +11,9 @@ The conversions run as free web tools at https://authortools.hyrumjones.com. The
   `Book` that `importer.py`'s `write_vault()` lays out as a vault. Their docstrings explain the structure guessing.
   Structure comes from the vault's `Manuscript Reading Order.md`; see the docstring at the top of `epub.py`.
   Parts are optional. Chapters listed before any `# Part` heading compile with no Part page.
-- `webapp/`: Flask app (home page, `/convert` upload, `/import/epub` and `/import/scrivener`, job queue with a
-  `/queue` counter, `/starter-vault.zip`). Import jobs use the format name `vault`; see `runner.py`.
+- `webapp/`: Flask app (home page, `/convert` upload, `/import/epub` and `/import/scrivener`, job queue,
+  `/starter-vault.zip`). Converter status: a header badge on every page (`status.js` polls `/queue`) and a
+  `/status` page with a 24-hour jobs chart; `jobs.py` keeps that history in memory (no titles, lost on restart). Import jobs use the format name `vault`; see `runner.py`.
 - `vault-template/`: starter vault. It must always compile; CI builds it.
 - `deploy/`: server setup (`DEPLOY.md`), systemd unit, nginx/Caddy config, `update.sh`.
 - `convert.py`, `epub_to_obsidian.py`, `make_obsidian_vault.py`: older one-off migration tools, superseded by

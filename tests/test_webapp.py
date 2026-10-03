@@ -295,9 +295,39 @@ def test_upload_needs_format_and_zip_and_unknown_job_404s(client):
 
 
 @needs_pandoc
-def test_queue_counter_shows_and_counts(client, tmp_path):
-    assert client.get("/queue").get_json() == {"running": 0, "waiting": 0}
-    assert "Converter is free" in client.get("/convert").get_data(as_text=True)
+def test_status_badge_queue_and_history(client):
+    q = client.get("/queue").get_json()
+    assert (q["running"], q["waiting"], q["level"], q["short"]) == (0, 0, "free", "Free right now")
+    for page in ("/", "/convert", "/import/epub"):
+        html_ = client.get(page).get_data(as_text=True)
+        assert "Free right now" in html_ and 'href="/status"' in html_ and "status.js" in html_
+    assert "No jobs in the last 24 hours" in client.get("/status").get_data(as_text=True)
+
     resp = post(client, ["epub"], vault=(io.BytesIO(zip_of_dir(TEMPLATE)), "v.zip"))
     wait_for(client, resp.headers["Location"])
-    assert client.get("/queue").get_json() == {"running": 0, "waiting": 0}
+    assert client.get("/queue").get_json()["level"] == "free"
+    page = client.get("/status").get_data(as_text=True)
+    assert "1 job finished" in page and "Jobs finished per hour" in page and "<svg" in page
+    assert "1 job in the last hour" in page          # bar tooltip and table row
+    assert "<td>EPUB</td><td>1</td><td>0</td>" in page
+    assert "My Novel" not in page and "Your Name" not in page   # no titles or names
+
+
+def test_wait_estimate_and_labels(tmp_path):
+    from webapp.jobs import JobQueue, wait_label
+    q = JobQueue(tmp_path / "data", Limits(max_queued=2), workers=0)  # no workers: jobs stay queued
+    ids = [q.submit(f, lambda d: None) for f in (["pdf"], ["epub"])]
+    snap = q.snapshot()
+    assert (snap["waiting"], snap["level"]) == (2, "full")
+    assert snap["waiting_jobs"] == ["PDF", "EPUB"] and snap["wait_seconds"] == 100
+    assert q.wait_before(ids[0]) == 0 and q.wait_before(ids[1]) == 90
+    assert [wait_label(s) for s in (20, 90, 300)] == ["under a minute", "about 2 minutes", "about 5 minutes"]
+
+
+def test_hour_chart_geometry():
+    from webapp.app import hour_chart
+    hours = [{"ok": 0, "failed": 0}] * 22 + [{"ok": 3, "failed": 1}, {"ok": 2, "failed": 0}]
+    chart = hour_chart(hours)
+    assert chart["top"] == 4 and len(chart["bars"]) == 24
+    assert chart["bars"][0]["path"] == "" and chart["bars"][-1]["tip"] == "2 jobs in the last hour"
+    assert chart["bars"][-2]["tip"] == "4 jobs 1 to 2 hours ago (1 failed)"

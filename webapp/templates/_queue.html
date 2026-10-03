@@ -1,8 +1,3 @@
-{# Live converter load; static/queue.js keeps it current. #}
-<p class="queue muted small" id="queue" aria-live="polite" data-url="{{ url_for('queue_counts') }}">
-  <span id="queue-text">{% if queue.running or queue.waiting -%}
-    Converter: {{ queue.running }} book{{ '' if queue.running == 1 else 's' }} converting, {{ queue.waiting }} waiting.
-  {%- else -%}
-    Converter is free. Your book will start right away.
-  {%- endif %}</span>
-</p>
+{# Converter load under an upload button; static/status.js keeps it current. #}
+<p class="queue muted small"><span class="queue-text" aria-live="polite">{{ site_status.label }}</span>.
+  <a href="{{ url_for('status_page') }}">Details</a></p>

@@ -14,14 +14,21 @@
       <img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="28" height="28">
       <span>Author Tools</span>
     </a>
-    <a class="byline" href="https://hyrumjones.com">by hyrumjones.com</a>
+    <div class="status-badge" data-url="{{ url_for('queue_counts') }}">
+      <a href="{{ url_for('status_page') }}" title="How busy the converter is">
+        <span class="dot {{ site_status.level }}" aria-hidden="true"></span>
+        <span class="status-text" aria-live="polite">{{ site_status.short }}</span>
+      </a>
+      <button type="button" class="refresh" hidden aria-label="Check again" title="Check again">↻</button>
+    </div>
   </header>
   <main>
     {% block main %}{% endblock %}
   </main>
   <footer class="site">
     Free tools for writing books in Obsidian. Uploads are deleted after conversion.
-    <br><a href="https://hyrumjones.com">hyrumjones.com</a>
+    <br><a href="https://hyrumjones.com">by hyrumjones.com</a> · <a href="{{ url_for('status_page') }}">Converter status</a>
   </footer>
+  <script src="{{ url_for('static', filename='status.js') }}"></script>
 </body>
 </html>

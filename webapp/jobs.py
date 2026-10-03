@@ -14,14 +14,36 @@ import secrets
 import signal
 import subprocess
 import sys
+import statistics
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
 from webapp.safezip import remove
 
 JOB_ID_LEN = 32  # hex chars
+HISTORY_SECONDS = 24 * 3600
+# Seconds a job type takes before there's history to go on (measured on the
+# 1-CPU Linode: an EPUB in seconds, a Scrivener import ~10 s, a novel PDF 1-2 min).
+DEFAULT_SECONDS = {"epub": 10, "pdf": 90, "epub,pdf": 100, "import-epub": 15, "import-scrivener": 15}
+JOB_TYPE_LABELS = {"epub": "EPUB", "pdf": "PDF", "epub,pdf": "EPUB + PDF",
+                   "import-epub": "EPUB import", "import-scrivener": "Scrivener import"}
+
+
+def job_type(st: dict) -> str:
+    """'epub', 'pdf', 'epub,pdf', 'import-epub' or 'import-scrivener'."""
+    if st.get("source"):
+        return f"import-{st['source']}"
+    return ",".join(st.get("formats") or ["epub"])
+
+
+def wait_label(seconds: float) -> str:
+    if seconds < 60:
+        return "under a minute"
+    minutes = round(seconds / 60)
+    return f"about {minutes} minute{'' if minutes == 1 else 's'}"
 
 
 @dataclass
@@ -45,8 +67,10 @@ class JobQueue:
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         self.limits = limits
         self._queue: queue.Queue = queue.Queue()
-        self._running = 0
-        self._running_lock = threading.Lock()
+        self._running: dict = {}   # job id -> (type, start time)
+        self._history: deque = deque()  # (finished time, type, seconds, ok), last 24 h
+        self._lock = threading.Lock()
+        self.workers = workers
         self._clear_leftovers()
         for _ in range(workers):
             threading.Thread(target=self._work, daemon=True).start()
@@ -102,9 +126,81 @@ class JobQueue:
 
     def counts(self) -> dict:
         """How many conversions are running now and how many are waiting."""
-        with self._running_lock:
-            running = self._running
+        with self._lock:
+            running = len(self._running)
         return {"running": running, "waiting": self._queue.qsize()}
+
+    def typical_seconds(self) -> dict:
+        """Median time per job type over the last 24 hours (defaults until
+        there's history)."""
+        with self._lock:
+            history = list(self._history)
+        typical = dict(DEFAULT_SECONDS)
+        for kind in {h[1] for h in history}:
+            typical[kind] = statistics.median(h[2] for h in history if h[1] == kind)
+        return typical
+
+    def snapshot(self) -> dict:
+        """What the status badge and /queue show: counts, an estimated wait
+        for a new upload, and a one-line label. No titles or file names."""
+        now = time.time()
+        typical = self.typical_seconds()
+        with self._lock:
+            running = [(kind, now - start) for kind, start in self._running.values()]
+        with self._queue.mutex:
+            waiting_ids = list(self._queue.queue)
+        waiting = [job_type(self.status(j) or {}) for j in waiting_ids]
+        work = sum(max(typical.get(k, 60) - age, 5) for k, age in running)
+        work += sum(typical.get(k, 60) for k in waiting)
+        wait = work / max(self.workers, 1)
+        if len(waiting) >= self.limits.max_queued:
+            level, short = "full", "Full · try again soon"
+            label = "Full right now. Try again in a few minutes"
+        elif running or waiting:
+            level, short = "busy", f"Busy · ~{max(round(wait / 60), 1)} min wait"
+            label = (f"Busy: {len(running)} converting, {len(waiting)} waiting. "
+                     f"New uploads start in {wait_label(wait)}")
+        else:
+            level, short, label = "free", "Free right now", "Free right now. Your upload starts right away"
+        return {"running": len(running), "waiting": len(waiting), "wait_seconds": round(wait),
+                "level": level, "label": label, "short": short,
+                "running_jobs": [{"type": JOB_TYPE_LABELS.get(k, k), "seconds": round(age)} for k, age in running],
+                "waiting_jobs": [JOB_TYPE_LABELS.get(k, k) for k in waiting]}
+
+    def wait_before(self, job_id: str) -> int:
+        """Estimated seconds until a waiting job starts."""
+        now = time.time()
+        typical = self.typical_seconds()
+        with self._lock:
+            running = [(kind, now - start) for kind, start in self._running.values()]
+        with self._queue.mutex:
+            waiting_ids = list(self._queue.queue)
+        if job_id not in waiting_ids:
+            return 0
+        ahead = [job_type(self.status(j) or {}) for j in waiting_ids[:waiting_ids.index(job_id)]]
+        work = sum(max(typical.get(k, 60) - age, 5) for k, age in running) + sum(typical.get(k, 60) for k in ahead)
+        return round(work / max(self.workers, 1))
+
+    def stats(self) -> dict:
+        """The last 24 hours: jobs finished per hour (oldest first), and
+        per-type counts, failures and typical time."""
+        now = time.time()
+        with self._lock:
+            history = list(self._history)
+        hours = []
+        for i in range(24, 0, -1):
+            start = now - i * 3600
+            in_hour = [h for h in history if start <= h[0] < start + 3600]
+            hours.append({"start": start, "ok": sum(h[3] for h in in_hour),
+                          "failed": sum(not h[3] for h in in_hour)})
+        by_type = []
+        for kind, label in JOB_TYPE_LABELS.items():
+            done = [h for h in history if h[1] == kind]
+            if done:
+                by_type.append({"type": label, "count": len(done), "failed": sum(not h[3] for h in done),
+                                "typical": round(statistics.median(h[2] for h in done))})
+        return {"hours": hours, "by_type": by_type, "total": len(history),
+                "failed": sum(not h[3] for h in history)}
 
     # --- internals --------------------------------------------------------
 
@@ -127,15 +223,21 @@ class JobQueue:
     def _work(self) -> None:
         while True:
             job_id = self._queue.get()
-            with self._running_lock:
-                self._running += 1
+            kind = job_type(self.status(job_id) or {})
+            with self._lock:
+                self._running[job_id] = (kind, time.time())
             try:
                 self._run(job_id)
             except Exception as e:  # never let one job kill the worker
                 self._finish(job_id, {"ok": False, "error": f"Internal error: {e}"})
             finally:
-                with self._running_lock:
-                    self._running -= 1
+                ok = (self.status(job_id) or {}).get("state") == "done"
+                with self._lock:
+                    _, start = self._running.pop(job_id)
+                    now = time.time()
+                    self._history.append((now, kind, now - start, ok))
+                    while self._history and self._history[0][0] < now - HISTORY_SECONDS:
+                        self._history.popleft()
                 self._queue.task_done()
 
     def _run(self, job_id: str) -> None:

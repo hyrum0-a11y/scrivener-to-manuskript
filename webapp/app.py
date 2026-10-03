@@ -20,7 +20,7 @@ from pathlib import Path
 
 from flask import Flask, abort, redirect, render_template, request, send_file, url_for
 
-from webapp.jobs import JobQueue, Limits, QueueFull
+from webapp.jobs import JobQueue, Limits, QueueFull, wait_label
 from webapp.safezip import UploadError, save_files
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -81,6 +81,29 @@ def tool_groups() -> list:
     ]
 
 
+def hour_chart(hours: list) -> dict:
+    """Geometry for the jobs-per-hour bar chart (one bar per hour, oldest
+    first), drawn as server-side SVG so it needs no script and no inline CSS."""
+    width, height, gap, radius = 480, 120, 2, 4
+    top = max([h["ok"] + h["failed"] for h in hours] + [1])
+    slot = width / len(hours)
+    bars = []
+    for i, h in enumerate(hours):
+        total = h["ok"] + h["failed"]
+        x, w = i * slot + gap / 2, slot - gap
+        bar_h = height * total / top
+        y = height - bar_h
+        r = min(radius, bar_h, w / 2)
+        path = (f"M{x:.1f},{height} V{y + r:.1f} Q{x:.1f},{y:.1f} {x + r:.1f},{y:.1f} "
+                f"H{x + w - r:.1f} Q{x + w:.1f},{y:.1f} {x + w:.1f},{y + r:.1f} V{height} Z") if total else ""
+        ago = len(hours) - i
+        when = "in the last hour" if ago == 1 else f"{ago - 1} to {ago} hours ago"
+        tip = f"{total} job{'' if total == 1 else 's'} {when}" + (f" ({h['failed']} failed)" if h["failed"] else "")
+        bars.append({"x": round(i * slot, 1), "w": round(slot, 1), "path": path, "tip": tip, "total": total,
+                     "failed": h["failed"], "when": when})
+    return {"width": width, "height": height, "top": top, "bars": bars}
+
+
 def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Flask:
     app = Flask(__name__)
     max_mb = int(os.environ.get("AUTHORTOOLS_MAX_UPLOAD_MB", "50"))
@@ -96,8 +119,7 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
         offered = available_formats()
         selected = [f for f in (selected or ["epub"]) if f in offered] or ["epub"]
         return render_template("convert.html", formats={f: FORMATS[f] for f in offered},
-                               selected=selected, max_mb=max_mb, error=error,
-                               queue=jobs.counts()), status
+                               selected=selected, max_mb=max_mb, error=error), status
 
     @app.get("/")
     def home():
@@ -140,7 +162,7 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
 
     def import_page(source, error=None, status=200, title="", author=""):
         return render_template("import.html", source=source, tool=IMPORTS[source], max_mb=max_mb,
-                               error=error, title=title, author=author, queue=jobs.counts()), status
+                               error=error, title=title, author=author), status
 
     @app.get("/import/<any(epub, scrivener):source>")
     def import_form(source):
@@ -189,7 +211,8 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
         if st is None:
             abort(404)
         return render_template("job.html", job_id=job_id, st=st, formats=FORMATS, imports=IMPORTS,
-                               position=jobs.position(job_id), queue=jobs.counts(),
+                               position=jobs.position(job_id),
+                               wait=wait_label(jobs.wait_before(job_id)),
                                keep_minutes=jobs.limits.keep_seconds // 60)
 
     @app.get("/jobs/<job_id>/<any(epub, pdf, vault):fmt>")
@@ -219,9 +242,20 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
         return send_file(io.BytesIO(starter_zip["data"]), mimetype="application/zip",
                          as_attachment=True, download_name="starter-vault.zip")
 
+    @app.context_processor
+    def site_status():
+        return {"site_status": jobs.snapshot()}
+
     @app.get("/queue")
     def queue_counts():
-        return jobs.counts()
+        resp = app.json.response(jobs.snapshot())
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    @app.get("/status")
+    def status_page():
+        stats = jobs.stats()
+        return render_template("status.html", stats=stats, chart=hour_chart(stats["hours"]))
 
     @app.get("/healthz")
     def healthz():
