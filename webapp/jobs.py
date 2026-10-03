@@ -45,6 +45,8 @@ class JobQueue:
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         self.limits = limits
         self._queue: queue.Queue = queue.Queue()
+        self._running = 0
+        self._running_lock = threading.Lock()
         self._clear_leftovers()
         for _ in range(workers):
             threading.Thread(target=self._work, daemon=True).start()
@@ -96,6 +98,12 @@ class JobQueue:
             waiting = list(self._queue.queue)
         return waiting.index(job_id) + 1 if job_id in waiting else 0
 
+    def counts(self) -> dict:
+        """How many conversions are running now and how many are waiting."""
+        with self._running_lock:
+            running = self._running
+        return {"running": running, "waiting": self._queue.qsize()}
+
     # --- internals --------------------------------------------------------
 
     @staticmethod
@@ -117,11 +125,15 @@ class JobQueue:
     def _work(self) -> None:
         while True:
             job_id = self._queue.get()
+            with self._running_lock:
+                self._running += 1
             try:
                 self._run(job_id)
             except Exception as e:  # never let one job kill the worker
                 self._finish(job_id, {"ok": False, "error": f"Internal error: {e}"})
             finally:
+                with self._running_lock:
+                    self._running -= 1
                 self._queue.task_done()
 
     def _run(self, job_id: str) -> None:

@@ -111,7 +111,8 @@ def test_untrusted_build_drops_server_files(tmp_path):
         names = zf.namelist()
         assert not any(b"SECRET-MARKER" in zf.read(n) for n in names)
         assert any(n.endswith(".css") for n in names)
-        assert "EPUB/media/cover.png" in names
+        # pandoc 3.1 keeps the name cover.png; newer releases rename it file0.png.
+        assert any(n.startswith("EPUB/media/") and zf.read(n) == PNG_1PX for n in names)
 
 
 def make_partless_vault(tmp_path):
@@ -183,7 +184,7 @@ def folder_parts(d: Path, prefix: str = "My Book") -> list:
 def test_home_lists_all_tools_in_groups(client):
     page = client.get("/").get_data(as_text=True)
     for name in ("Starter vault", 'href="/starter-vault.zip"', "Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Markdown", "EPUB → Obsidian",
-                 "Publish your book", "Bring your work in", "Pick your vault"):
+                 "Convert your Obsidian book", "Bring your work in", "Pick your vault"):
         assert name in page
     assert page.count("Coming soon") == (3 if pdf_available() else 4)
 
@@ -290,3 +291,12 @@ def test_upload_needs_format_and_zip_and_unknown_job_404s(client):
     assert post(client, ["epub"], vault=(io.BytesIO(b"x"), "book.txt")).status_code == 400
     assert client.get("/jobs/" + "0" * 32).status_code == 404
     assert client.get("/jobs/../../etc/passwd").status_code == 404
+
+
+@needs_pandoc
+def test_queue_counter_shows_and_counts(client, tmp_path):
+    assert client.get("/queue").get_json() == {"running": 0, "waiting": 0}
+    assert "Converter is free" in client.get("/convert").get_data(as_text=True)
+    resp = post(client, ["epub"], vault=(io.BytesIO(zip_of_dir(TEMPLATE)), "v.zip"))
+    wait_for(client, resp.headers["Location"])
+    assert client.get("/queue").get_json() == {"running": 0, "waiting": 0}

@@ -94,3 +94,4 @@ label.check .muted { font-size: .9rem; }
 .issues ul { color: var(--fg); font-size: .9rem; margin: .3em 0 0; }
 .ok { color: #2e7d32; }
 @media (prefers-color-scheme: dark) { .ok { color: #8fd694; } }
+.queue { margin-top: .6em; }

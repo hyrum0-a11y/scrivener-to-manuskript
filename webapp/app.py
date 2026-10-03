@@ -53,7 +53,7 @@ def tool_groups() -> list:
              "desc": "A ready-made Obsidian vault set up for these tools. Unzip it, open it in "
                      "Obsidian and start writing."},
         ]},
-        {"title": "Publish your book", "tools": [
+        {"title": "Convert your Obsidian book", "tools": [
             {"name": "Obsidian → EPUB", "href": convert("epub"),
              "desc": "Turn your Obsidian book vault into an e-book for Kindle, Apple Books, Kobo and other readers."},
             {"name": "Obsidian → PDF", "href": convert("pdf") if pdf_available() else None,
@@ -85,7 +85,8 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
         offered = available_formats()
         selected = [f for f in (selected or ["epub"]) if f in offered] or ["epub"]
         return render_template("convert.html", formats={f: FORMATS[f] for f in offered},
-                               selected=selected, max_mb=max_mb, error=error), status
+                               selected=selected, max_mb=max_mb, error=error,
+                               queue=jobs.counts()), status
 
     @app.get("/")
     def home():
@@ -132,7 +133,7 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
         if st is None:
             abort(404)
         return render_template("job.html", job_id=job_id, st=st, formats=FORMATS,
-                               position=jobs.position(job_id),
+                               position=jobs.position(job_id), queue=jobs.counts(),
                                keep_minutes=jobs.limits.keep_seconds // 60)
 
     @app.get("/jobs/<job_id>/<any(epub, pdf):fmt>")
@@ -161,6 +162,10 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
             starter_zip["data"] = buf.getvalue()
         return send_file(io.BytesIO(starter_zip["data"]), mimetype="application/zip",
                          as_attachment=True, download_name="starter-vault.zip")
+
+    @app.get("/queue")
+    def queue_counts():
+        return jobs.counts()
 
     @app.get("/healthz")
     def healthz():

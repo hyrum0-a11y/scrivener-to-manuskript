@@ -30,6 +30,7 @@
   </fieldset>
 
   <button type="submit" id="submit">Check and convert</button>
+  {% include "_queue.html" %}
   <p class="muted small">Up to {{ max_mb }} MB.</p>
 </form>
 
@@ -46,4 +47,5 @@
       <code>subtitle</code>, <code>running_header</code>, and <code>pov_signs_dir</code> (a folder inside the vault).</li>
 </ol>
 <script src="{{ url_for('static', filename='upload.js') }}"></script>
+<script src="{{ url_for('static', filename='queue.js') }}"></script>
 {% endblock %}
