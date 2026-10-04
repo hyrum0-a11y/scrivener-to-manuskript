@@ -8,8 +8,8 @@ center: *A short epigraph or quotation*
 center: *can go here*
 
 ## Chapter 1
-%%Optional: the lines below print under the chapter title, for example a character's name or a place and date. Delete them if you don't want any.%%
-center: **Anna**
+%%Optional: the lines below print under the chapter title, for example a character's name or a place and date. They print in plain text unless you add *italic* or **bold** yourself. Delete them if you don't want any.%%
+center: Anna
 left: London, 1952
 - [[01 - Opening Scene]]
 - [[02 - Second Scene]]

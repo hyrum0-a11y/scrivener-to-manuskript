@@ -587,7 +587,7 @@ PLACEHOLDER_RE = re.compile(r"\[(YOUR TITLE|Your Name|Year|Month Year|ISBN|Your 
                             r"|Lorem ipsum|Nemo enim ipsam")
 PLACEHOLDER_BOOK_INFO = {"title": "My Novel", "author": "Your Name", "author_file_as": "Last, First"}
 # The starter Reading Order's example lines under its part and chapter titles.
-PLACEHOLDER_ORDER_RE = re.compile(r"Part I The Beginning|A short epigraph|can go here|\*\*Anna\*\*|London, 1952")
+PLACEHOLDER_ORDER_RE = re.compile(r"Part I The Beginning|A short epigraph|can go here|center: Anna\b|London, 1952")
 
 
 def placeholder_leftovers(vault: Path, book_info: dict, notes: list) -> list:
@@ -599,7 +599,7 @@ def placeholder_leftovers(vault: Path, book_info: dict, notes: list) -> list:
         if hits:
             found.append(f"{path.relative_to(vault)}: {', '.join(hits)}")
     order = "\n".join(reading_order_lines(vault / "Manuscript Reading Order.md"))
-    hits = list(dict.fromkeys(m.group(0).strip("*") for m in PLACEHOLDER_ORDER_RE.finditer(order)))
+    hits = list(dict.fromkeys(m.group(0).removeprefix("center: ") for m in PLACEHOLDER_ORDER_RE.finditer(order)))
     if hits:
         found.append(f"Manuscript Reading Order.md: the example lines {', '.join(hits)}")
     return found

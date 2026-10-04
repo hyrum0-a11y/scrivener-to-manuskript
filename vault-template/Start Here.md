@@ -120,7 +120,7 @@ than chapters and scenes: delete whatever you don't want. What's possible:
   center: *with a single step*
 
   ## Chapter 1
-  center: **Anna**
+  center: Anna
   left: London, 1952
   - [[01 - Opening Scene]]
   ```
