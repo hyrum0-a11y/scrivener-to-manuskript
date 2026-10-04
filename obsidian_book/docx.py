@@ -133,8 +133,11 @@ def style_xml() -> str:
         _style("EpigraphLater", _spacing(twips(0.2), 0, 432) + CENTER, pt(11)),
         _style("PartLeft", _spacing(twips(0.8), 0, 432) + NO_INDENT + '<w:jc w:val="left"/>', pt(11)),
         _style("PartLeftLater", _spacing(twips(0.2), 0, 432) + NO_INDENT + '<w:jc w:val="left"/>', pt(11)),
+        _style("PartRight", _spacing(twips(0.8), 0, 432) + NO_INDENT + '<w:jc w:val="right"/>', pt(11)),
+        _style("PartRightLater", _spacing(twips(0.2), 0, 432) + NO_INDENT + '<w:jc w:val="right"/>', pt(11)),
         _style("POVName", _spacing(0, 173) + CENTER, _font(HEADING_FONT) + pt(13)),
         _style("ChapterDate", _spacing(216, 432) + NO_INDENT + '<w:jc w:val="left"/>', pt(9.5)),
+        _style("ChapterRight", _spacing(216, 432) + NO_INDENT + '<w:jc w:val="right"/>', pt(9.5)),
         _style("Dropcap", NO_INDENT),
         _style("DropcapLetter", rpr=_font(BODY_FONT) + pt(31.5), based_on="DefaultParagraphFont", kind="character"),
         _style("Noindent", NO_INDENT),
@@ -283,7 +286,7 @@ def build_markdown(vault: Path, book_info: dict, token: str) -> tuple:
             if subtitle:
                 doc.add(_div("PartSubtitle", subtitle))
             for k, (align, texts) in enumerate(line_groups(part.lines)):
-                style = ("Epigraph" if align == "center" else "PartLeft") + ("Later" if k else "")
+                style = {"center": "Epigraph", "left": "PartLeft", "right": "PartRight"}[align] + ("Later" if k else "")
                 doc.add(_div(style, "  \n".join(texts)))
             # The Part page is one (right-hand) page, so one blank page puts its first
             # chapter on a right-hand page too. Done by hand rather than with an
@@ -296,7 +299,8 @@ def build_markdown(vault: Path, book_info: dict, token: str) -> tuple:
             doc.section(start, headers=True, restart=part.implicit and part_no == 1 and i == 0)
             doc.add(f"## {chapter.title} {{#chapter-{chapter_no}}}")
             for align, texts in line_groups(chapter.lines):
-                doc.add(_div("POVName" if align == "center" else "ChapterDate", "  \n".join(texts)))
+                style = {"center": "POVName", "left": "ChapterDate", "right": "ChapterRight"}[align]
+                doc.add(_div(style, "  \n".join(texts)))
             for n, fname in enumerate(chapter.scenes):
                 body = expand_paragraphs(strip_cuts(read(fname)[1]))
                 first, rest = split_first_paragraph(body)

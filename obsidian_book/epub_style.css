@@ -64,6 +64,12 @@ h2 {
   font-size: 0.9em;
 }
 
+.chapterright p {
+  text-align: right;
+  text-indent: 0;
+  font-size: 0.9em;
+}
+
 .partsubtitle p {
   text-align: center;
   text-indent: 0;
@@ -73,6 +79,13 @@ h2 {
 
 .epigraph p {
   text-align: center;
+  text-indent: 0;
+  font-size: 1.2em;
+  line-height: 1.8em;
+}
+
+.partright p {
+  text-align: right;
   text-indent: 0;
   font-size: 1.2em;
   line-height: 1.8em;

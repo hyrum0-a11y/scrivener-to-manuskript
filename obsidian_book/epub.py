@@ -334,7 +334,13 @@ def group_correspondence(body: str) -> str:
     return "\n\n".join(chunks)
 
 
-LABEL_RE = re.compile(r"^(center|left):\s*(.*)$", re.IGNORECASE)
+LABEL_RE = re.compile(r"^(center|left|right):\s*(.*)$", re.IGNORECASE)
+
+
+def reading_order_lines(path: Path) -> list:
+    """The Reading Order's lines with %%comments%% removed, including
+    comment blocks spanning several lines (like the starter vault's help)."""
+    return re.sub(r"%%.*?%%", "", path.read_text(encoding="utf-8"), flags=re.S).splitlines()
 
 
 def reading_order_is_legacy(lines: list) -> bool:
@@ -362,8 +368,8 @@ def parse_reading_order(path: Path):
     front_matter/back_matter are lists of filenames (no extension); parts is
     a list of Part, each holding its Chapters in reading order.
 
-    Lines under a part or chapter heading that start with "center:" or
-    "left:" are printed under its title, in that alignment, keeping their
+    Lines under a part or chapter heading that start with "center:",
+    "left:" or "right:" are printed under its title, in that alignment, keeping their
     Obsidian *italic* / **bold** formatting. Other lines there are ignored
     (collected in .ignored so the book check can list them). %%comments%%
     are removed first, so notes to yourself are safe anywhere.
@@ -372,7 +378,7 @@ def parse_reading_order(path: Path):
     a chapter, the first plain line is centred in bold (a POV name) and the
     rest are left-aligned (dates); under a part, ">" lines are a centred
     italic epigraph. (Temporary, until those vaults are converted.)"""
-    lines = [COMMENT_RE.sub("", line) for line in path.read_text(encoding="utf-8").splitlines()]
+    lines = reading_order_lines(path)
     legacy = reading_order_is_legacy(lines)
     front_matter: list[str] = []
     back_matter: list[str] = []
@@ -612,11 +618,10 @@ def check_vault(vault: Path, book_info: dict) -> int:
     ignored += [(c.title, line) for p in parts for c in p.chapters for line in c.ignored]
     if ignored:
         print("WARNING: these lines in Manuscript Reading Order.md aren't printed. To print a line under a "
-              "part or chapter title, start it with center: or left: (formatting like *italic* works):")
+              "part or chapter title, start it with center:, left: or right: (formatting like *italic* works):")
         for where, line in ignored:
             print(f"  - under {where}: {line}")
-    if reading_order_is_legacy([COMMENT_RE.sub("", l)
-                                for l in reading_order_path.read_text(encoding="utf-8").splitlines()]):
+    if reading_order_is_legacy(reading_order_lines(reading_order_path)):
         old = [(p.title, f"{align}: {t}") for p in parts for align, t in p.lines]
         old += [(c.title, f"{align}: {t}") for p in parts for c in p.chapters for align, t in c.lines]
         if old:
@@ -671,7 +676,7 @@ def build_document(vault: Path, book_info: dict) -> str:
         for align, texts in line_groups(part.lines):
             chunks.append(BLANK_LINE)
             chunks.append(BLANK_LINE)
-            css = "epigraph" if align == "center" else "partleft"
+            css = {"center": "epigraph", "left": "partleft", "right": "partright"}[align]
             chunks.append(f"::: {{.{css}}}\n" + "\n".join(f"{t}  " for t in texts) + "\n:::")
 
         for chapter in part.chapters:
@@ -681,7 +686,7 @@ def build_document(vault: Path, book_info: dict) -> str:
                 chunks.append(BLANK_LINE)
                 chunks.append(BLANK_LINE)
             for k, (align, texts) in enumerate(groups):
-                css = "povname" if align == "center" else "chapterdate"
+                css = {"center": "povname", "left": "chapterdate", "right": "chapterright"}[align]
                 chunks.append(f"::: {{.{css}}}\n" + "  \n".join(texts) + "\n:::")
                 if align == "center":
                     chunks.append(BLANK_LINE)

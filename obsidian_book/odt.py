@@ -216,6 +216,10 @@ def patch_named_styles(xml: str) -> str:
   <style:paragraph-properties fo:text-align="center" fo:text-indent="0in" fo:margin-bottom="0.12in" />
   <style:text-properties fo:font-family="{HEADING_FONT}" fo:font-size="13pt" />
 </style:style>
+<style:style style:name="ChapterRight" style:family="paragraph" style:parent-style-name="Standard">
+  <style:paragraph-properties fo:text-align="end" fo:text-indent="0in" fo:margin-top="0.1in" fo:margin-bottom="0.3in" />
+  <style:text-properties fo:font-size="9.5pt" />
+</style:style>
 <style:style style:name="ChapterDate" style:family="paragraph" style:parent-style-name="Standard">
   <style:paragraph-properties fo:text-align="left" fo:text-indent="0in" fo:margin-top="0.1in" fo:margin-bottom="0.3in" />
   <style:text-properties fo:font-size="9.5pt" />
@@ -676,7 +680,7 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
             global_chapter_idx += 1
             chunks.append(f"## {chapter.title}{chapter_id_attr}")
             for align, texts in line_groups(chapter.lines):
-                style = "POVName" if align == "center" else "ChapterDate"
+                style = {"center": "POVName", "left": "ChapterDate", "right": "ChapterRight"}[align]
                 chunks.append(f'::: {{custom-style="{style}"}}\n' + "  \n".join(texts) + "\n:::")
 
             scenes = chapter.scenes

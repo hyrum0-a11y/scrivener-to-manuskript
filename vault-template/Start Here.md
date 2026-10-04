@@ -72,8 +72,8 @@ Most books need nothing more than chapters and scenes. If you want more:
 - **Parts**: a line starting with `# ` begins a part, with its own page,
   for example `# Part I The Beginning`. Chapters listed under it belong to
   that part. Without any `# ` lines, the book simply has no parts.
-- **Lines under a part or chapter title**: start a line with `center:` or
-  `left:` and it's printed under the title, centred or left-aligned. Use
+- **Lines under a part or chapter title**: start a line with `center:`,
+  `left:` or `right:` and it's printed under the title in that position. Use
   Obsidian's usual formatting inside it: `center: *A line of poetry*` is
   italic, `center: **Anna**` is bold. For example:
 
@@ -90,8 +90,12 @@ Most books need nothing more than chapters and scenes. If you want more:
 
 - **Notes to yourself**: anything between `%%` marks, like
   `%%move this chapter?%%`, is ignored. Any other line under a title that
-  doesn't start with `center:` or `left:` is left out of the book, and the
-  book check lists it so you can see.
+  doesn't start with `center:`, `left:` or `right:` is left out of the book,
+  and the book check lists it so you can see.
+
+A short reminder of all of this sits at the bottom of the Reading Order
+note. You'll see it while editing; it's hidden in reading view and never
+printed.
 
 If a scene doesn't appear in your book, it's almost always missing from the
 Reading Order, or its name there is spelled differently from the note.

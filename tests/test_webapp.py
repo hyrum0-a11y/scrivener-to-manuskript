@@ -410,3 +410,17 @@ def test_information_page_printed_as_written(tmp_path):
     doc = build_document(*load_vault(vault))
     assert "[YOUR TITLE]" in doc and "ISBN (eBook): [ISBN]" in doc   # nothing filled in from Book Info
     assert "X, Book 2" not in doc and "9781234567897" not in doc
+
+
+def test_right_label_and_multiline_comment_block(tmp_path):
+    from obsidian_book.epub import parse_reading_order
+    _, parts, _ = parse_reading_order(write_order(tmp_path, (
+        "## One\nright: *Dear diary*\n- [[a]]\n\n%%\nHelp text\ncenter: example\n## Not a chapter\n%%\n")))
+    assert [c.title for c in parts[0].chapters] == ["One"]
+    assert parts[0].chapters[0].lines == [("right", "*Dear diary*")]
+
+
+def test_starter_reading_order_help_is_not_printed():
+    from obsidian_book.epub import build_document, load_vault
+    doc = build_document(*load_vault(TEMPLATE))
+    assert "HOW THIS NOTE WORKS" not in doc and "centred" not in doc

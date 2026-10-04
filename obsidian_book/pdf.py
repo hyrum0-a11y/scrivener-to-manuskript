@@ -453,7 +453,7 @@ def build_html(vault: Path, book_info: dict) -> tuple:
         anchor = f"part-{idx}"
         epigraph_html = ""
         for k, (align, texts) in enumerate(line_groups(part.lines)):
-            css = ("epigraph" if align == "center" else "partleft") + (" later" if k else "")
+            css = {"center": "epigraph", "left": "partleft", "right": "partright"}[align] + (" later" if k else "")
             epigraph_html += f'<p class="{css}">{"<br/>".join(md_inline_to_html(t) for t in texts)}</p>'
         # Part I resets the visible page counter to 1 — see the CSS ".partone"
         # comment for why it needs a page name distinct from other Parts. A
@@ -485,7 +485,7 @@ def build_html(vault: Path, book_info: dict) -> tuple:
             # Lines under the title; POV sign images go right after the first centred group.
             header_html, signed = "", False
             for align, texts in line_groups(chapter.lines):
-                css = "povname" if align == "center" else "chapterdate"
+                css = {"center": "povname", "left": "chapterdate", "right": "chapterdate right"}[align]
                 header_html += f'<p class="{css}">{"<br/>".join(md_inline_to_html(t) for t in texts)}</p>'
                 if align == "center" and not signed:
                     header_html += sign_html
@@ -681,7 +681,7 @@ h1, h2 {
   text-indent: 0;
   margin-top: 0.6in;
 }
-.epigraph, .partleft {
+.epigraph, .partleft, .partright {
   font-family: 'EB Garamond';
   font-size: 11pt;
   text-align: center;
@@ -690,7 +690,8 @@ h1, h2 {
   margin-top: 0.8in;
 }
 .partleft { text-align: left; }
-.epigraph.later, .partleft.later { margin-top: 0.2in; }
+.partright { text-align: right; }
+.epigraph.later, .partleft.later, .partright.later { margin-top: 0.2in; }
 
 /* Chapter pages */
 .chapter-heading { font-size: 17pt; margin-top: 0.3in; margin-bottom: 0.35in; }
@@ -706,6 +707,7 @@ h1, h2 {
   width: 0.55in;
   margin: 0.1in auto;
 }
+.chapterdate.right { text-align: right; }
 .chapterdate {
   font-size: 9.5pt;
   text-indent: 0;
