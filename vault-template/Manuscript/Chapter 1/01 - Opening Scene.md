@@ -3,6 +3,6 @@ title: "Opening Scene"
 section: "Manuscript"
 uuid: "00000000-0000-0000-0000-000000000000"
 ---
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+Replace this paragraph with your opening scene. Each paragraph sits on its own line, with no empty line between paragraphs: the converter adds proper paragraph spacing and indents for you.
+The chapter title printed in your EPUB, PDF and Word book comes from the line starting with ## in Manuscript Reading Order, not from this note's name or the title at the top of this note. Name your scene notes however helps you find them.
+A third paragraph, just to show the one-paragraph-per-line convention holding across more than one paragraph.
