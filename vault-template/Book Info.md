@@ -30,6 +30,7 @@ Leave any of these as `""` if you don't need them.
 ```book-info
 isbn: ""
 scene_break: "—※—"
+chapter_space_above: ""
 trim_size: ""
 running_header: ""
 pov_signs_dir: ""
@@ -42,6 +43,9 @@ pov_signs: ""
   between scenes, write `blank`. Each scene is its own note,
   so you never type it in your writing: it's added between scenes for you.
   Leave it as `""` to use `—※—`.
+- **chapter_space_above**: how many empty lines to leave above every chapter
+  title, for example `5` or `8`, to start chapters lower on the page as
+  many printed books do. Leave it as `""` for the usual small gap.
 - **trim_size**: the page size for the PDF and Word versions, for example `5.25in 8in` (the
   default) or `6in 9in`.
 - **running_header**: the text at the top of printed and Word pages, if it

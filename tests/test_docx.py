@@ -156,3 +156,34 @@ def test_blank_scene_break(tmp_path):
     doc = docx_parts(build_docx(v, tmp_path / "out"))["word/document.xml"].decode()
     sep = re.search(r'<w:pStyle w:val="SepBlank"\s*/>.*?</w:p>', doc, re.S).group(0)
     assert " " in sep and "—※—" not in doc and "blank" not in sep
+
+
+def set_info(v: Path, old: str, new: str) -> None:
+    info = v / "Book Info.md"
+    info.write_text(info.read_text().replace(old, new))
+
+
+@needs_pandoc
+def test_chapter_space_above(tmp_path):
+    from obsidian_book.epub import BookError, chapter_space_above
+    assert chapter_space_above({"chapter_space_above": ""}) is None and chapter_space_above({"chapter_space_above": "5"}) == 5
+    with pytest.raises(BookError, match="number of empty lines"):
+        chapter_space_above({"chapter_space_above": "lots"})
+    v = vault_copy(tmp_path)
+    set_info(v, 'chapter_space_above: ""', 'chapter_space_above: "6"')
+    styles = docx_parts(build_docx(v, tmp_path / "out"))["word/styles.xml"].decode()
+    heading2 = re.search(r'w:styleId="Heading2".*?</w:style>', styles, re.S).group(0)
+    assert 'w:before="1701"' in heading2                     # 6 lines x 10.5pt x 1.35 = 85pt
+    with zipfile.ZipFile(build_epub(v, tmp_path / "out")) as zf:
+        css = "".join(zf.read(n).decode() for n in zf.namelist() if n.endswith(".css"))
+    assert "margin-top: 8.10rem" in css
+    pdf = pytest.importorskip("obsidian_book.pdf")
+    import pymupdf
+    out = pdf.build_pdf(v, tmp_path / "pdf6")
+    doc = pymupdf.open(out)
+    page = next(p for p in doc if p.get_text().strip().startswith("Chapter 1"))
+    y_spaced = page.search_for("Chapter 1")[0].y0
+    set_info(v, 'chapter_space_above: "6"', 'chapter_space_above: ""')
+    doc = pymupdf.open(pdf.build_pdf(v, tmp_path / "pdf0"))
+    page = next(p for p in doc if p.get_text().strip().startswith("Chapter 1"))
+    assert y_spaced - page.search_for("Chapter 1")[0].y0 > 50   # moved down by roughly 85pt - 0.3in

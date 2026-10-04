@@ -80,7 +80,7 @@ def make_epub(tmp_path, entries: list, files: dict, nested: dict | None = None, 
            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Test Book</dc:title>'
            '<dc:creator>Ann Author</dc:creator><dc:identifier>urn:isbn:9781234567897</dc:identifier></metadata>'
            '<manifest><item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>'
-           + (f'<item id="cov" href="cover.png" properties="cover-image" media-type="image/png"/>' if cover else "")
+           + ('<item id="cov" href="cover.png" properties="cover-image" media-type="image/png"/>' if cover else "")
            + f'{manifest}</manifest>'
            f'<spine>{spine}</spine></package>')
     path = tmp_path / name

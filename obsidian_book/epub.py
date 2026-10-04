@@ -96,7 +96,8 @@ class BookError(Exception):
     return it to the uploader)."""
 
 BOOK_INFO_REQUIRED_KEYS = ("title", "author", "author_file_as", "publisher", "cover")
-BOOK_INFO_OPTIONAL_KEYS = {"isbn": "", "output_dir": "", "scene_break": ""}
+BOOK_INFO_OPTIONAL_KEYS = {"isbn": "", "output_dir": "", "scene_break": "", "chapter_space_above": ""}
+LINE_SPACING = 1.35  # body line height as a multiple of the type size, in every format
 DEFAULT_SCENE_BREAK = "—※—"
 DEFAULT_OUTPUT_DIR = "~/Downloads"  # when Book Info.md's output_dir is blank
 
@@ -200,6 +201,18 @@ def scene_break(book_info: dict) -> str:
     if value.lower() in ("blank", "blank line", "empty", "space"):
         return BLANK_LINE
     return value or DEFAULT_SCENE_BREAK
+
+
+def chapter_space_above(book_info: dict):
+    """Book Info.md's chapter_space_above: how many empty lines go above each
+    chapter title, as an int, or None to keep each format's usual spacing."""
+    value = book_info.get("chapter_space_above", "").strip()
+    if not value:
+        return None
+    if not value.isdigit() or int(value) > 40:
+        raise BookError(f"ERROR: chapter_space_above in Book Info.md should be a number of empty lines "
+                        f"between 0 and 40, like \"5\" (it's \"{value}\").")
+    return int(value)
 
 
 def markdown_literal(text: str) -> str:
@@ -838,6 +851,11 @@ def build_epub(vault, output_dir=None, *, untrusted: bool = False) -> Path:
             "--epub-chapter-level=2",
             "--css", str(CSS),
         ]
+        space = chapter_space_above(book_info)
+        if space is not None:
+            extra_css = Path(tmp_dir) / "chapter-space.css"
+            extra_css.write_text(f"h2 {{ margin-top: {space * LINE_SPACING:.2f}rem; }}\n", encoding="utf-8")
+            cmd += ["--css", str(extra_css)]
         cover = resolve_cover(vault, book_info)
         if cover and cover.is_file():
             cmd += ["--epub-cover-image", str(cover)]

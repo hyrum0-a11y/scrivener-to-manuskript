@@ -60,7 +60,7 @@ from pathlib import Path
 import pymupdf as fitz
 import weasyprint
 
-from obsidian_book.epub import (TITLE_PAGE, BookError, line_groups, parse_title_page, scene_break, load_vault, parse_reading_order, resolve_output_dir,
+from obsidian_book.epub import (LINE_SPACING, TITLE_PAGE, BookError, chapter_space_above, line_groups, parse_title_page, scene_break, load_vault, parse_reading_order, resolve_output_dir,
                                 safe_filename)
 
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
@@ -881,6 +881,9 @@ def build_pdf(vault, output_dir=None, *, untrusted: bool = False) -> Path:
     print("Rendering PDF (weasyprint)...")
     fetcher = {"url_fetcher": _vault_only_fetcher(vault)} if untrusted else {}
     css = build_css(trim_size, book_info["author"], running_header)
+    space = chapter_space_above(book_info)
+    if space is not None:  # empty body lines (10.5pt type) above each chapter title
+        css += f"\n.chapter-heading {{ margin-top: {space * 10.5 * LINE_SPACING:.1f}pt; }}\n"
     weasyprint.HTML(string=doc_html, base_url=str(vault), **fetcher).write_pdf(
         str(output), stylesheets=[weasyprint.CSS(string=css, **fetcher)]
     )

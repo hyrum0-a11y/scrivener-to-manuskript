@@ -50,7 +50,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
 from obsidian_book.epub import (
-    BLANK_LINE, CENTERED_HIDDEN_HEADING_TITLES, PART_TITLE_RE, TITLE_PAGE, UNTRUSTED_FILTER, BookError,
+    BLANK_LINE, CENTERED_HIDDEN_HEADING_TITLES, LINE_SPACING, chapter_space_above, PART_TITLE_RE, TITLE_PAGE, UNTRUSTED_FILTER, BookError,
     check_vault, expand_paragraphs, line_groups, markdown_literal, scene_break, group_correspondence, index_vault_files, load_vault,
     parse_reading_order, parse_title_page, render_paragraph_groups, resolve_output_dir, safe_filename,
     split_first_paragraph, strip_cuts, strip_frontmatter,
@@ -97,8 +97,10 @@ NO_INDENT = '<w:ind w:firstLine="0"/>'
 HEADING = _font(HEADING_FONT) + "<w:b/><w:bCs/>"
 
 
-def style_xml() -> str:
-    """Every style the document uses, replacing pandoc's versions of the same ids."""
+def style_xml(chapter_space=None) -> str:
+    """Every style the document uses, replacing pandoc's versions of the same ids.
+    chapter_space: empty body lines above chapter titles (None: 0.3in)."""
+    above_chapter = twips(0.3) if chapter_space is None else round(chapter_space * 10.5 * LINE_SPACING * 20)
     pt = lambda points: f'<w:sz w:val="{round(points * 2)}"/><w:szCs w:val="{round(points * 2)}"/>'
     styles = [
         _style("Normal", _spacing(0, 0, 324) + '<w:jc w:val="both"/>',
@@ -109,7 +111,7 @@ def style_xml() -> str:
         _style("Compact", based_on="BodyText", custom=False),
         _style("Heading1", '<w:keepNext/>' + _spacing(twips(1.4), 0) + CENTER + '<w:outlineLvl w:val="0"/>',
                HEADING + pt(22) + '<w:color w:val="000000"/>', custom=False, extra='<w:next w:val="BodyText"/>'),
-        _style("Heading2", '<w:keepNext/>' + _spacing(twips(0.3), twips(0.35)) + CENTER + '<w:outlineLvl w:val="1"/>',
+        _style("Heading2", '<w:keepNext/>' + _spacing(above_chapter, twips(0.35)) + CENTER + '<w:outlineLvl w:val="1"/>',
                HEADING + pt(17) + '<w:color w:val="000000"/>', custom=False, extra='<w:next w:val="BodyText"/>'),
         _style("Hyperlink", rpr='<w:color w:val="auto"/>', based_on="DefaultParagraphFont", kind="character",
                custom=False),
@@ -152,12 +154,12 @@ def style_xml() -> str:
     return "".join(styles)
 
 
-def build_reference_docx(dest: Path) -> None:
+def build_reference_docx(dest: Path, chapter_space=None) -> None:
     """pandoc's default reference.docx with style_xml()'s styles swapped in."""
     result = subprocess.run(["pandoc", "--print-default-data-file", "reference.docx"], capture_output=True)
     if result.returncode != 0:
         raise BookError(f"pandoc couldn't provide its Word template: {result.stderr.decode(errors='replace')}")
-    ours = style_xml()
+    ours = style_xml(chapter_space)
     ours_ids = set(re.findall(r'w:styleId="([^"]+)"', ours))
     with zipfile.ZipFile(io.BytesIO(result.stdout)) as src, zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as out:
         for name in src.namelist():
@@ -490,7 +492,7 @@ def build_docx(vault, output_dir=None, *, untrusted: bool = False) -> Path:
     with tempfile.TemporaryDirectory() as tmp:
         source, reference = Path(tmp) / "book.md", Path(tmp) / "reference.docx"
         source.write_text(markdown, encoding="utf-8")
-        build_reference_docx(reference)
+        build_reference_docx(reference, chapter_space_above(book_info))
         cmd = ["pandoc", str(source), "-o", str(output), "--reference-doc", str(reference),
                "--resource-path", str(vault)]
         if untrusted:
