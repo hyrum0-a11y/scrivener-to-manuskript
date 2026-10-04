@@ -106,7 +106,9 @@ than chapters and scenes: delete whatever you don't want. What's possible:
 
 - **Parts**: a line starting with `# ` begins a part, with its own page,
   for example `# Part I The Beginning`. Chapters listed under it belong to
-  that part. Without any `# ` lines, the book simply has no parts.
+  that part. Without any `# ` lines, the book simply has no parts, and you
+  can keep your chapter folders directly inside the Manuscript folder
+  instead of in part folders.
 - **Lines under a part or chapter title**: start a line with `center:`,
   `left:` or `right:` and it's printed under the title in that position. Use
   Obsidian's usual formatting inside it: `center: *A line of poetry*` is

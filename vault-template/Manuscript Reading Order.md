@@ -3,7 +3,7 @@
 - [[Acknowledgments]]  _Front Matter_
 
 # Part I The Beginning
-%%Optional: the lines below print under the part title. Delete them if you don't want any. No parts in your book? Delete this whole part line too, and just list your chapters.%%
+%%Optional: the lines below print under the part title. Delete them if you don't want any. No parts in your book? Delete this whole part line too, and just list your chapters. You can also move the chapter folders up so they sit directly inside the Manuscript folder; folder names and places don't change the book, only this note does.%%
 center: *A short epigraph or quotation*
 center: *can go here*
 
