@@ -15,7 +15,7 @@
       <span>Author Tools</span>
     </a>
     <div class="status-badge" data-url="{{ url_for('queue_counts') }}">
-      <a href="{{ url_for('status_page') }}" title="How busy the converter is">
+      <a href="{{ url_for('status_page') }}" title="How many conversions are running or waiting. Click for the full list.">
         <span class="dot {{ site_status.level }}" aria-hidden="true"></span>
         <span class="status-text" aria-live="polite">{{ site_status.short }}</span>
       </a>

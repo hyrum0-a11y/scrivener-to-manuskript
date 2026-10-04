@@ -297,10 +297,10 @@ def test_upload_needs_format_and_zip_and_unknown_job_404s(client):
 @needs_pandoc
 def test_status_badge_queue_and_history(client):
     q = client.get("/queue").get_json()
-    assert (q["running"], q["waiting"], q["level"], q["short"]) == (0, 0, "free", "Free right now")
+    assert (q["running"], q["waiting"], q["level"], q["short"]) == (0, 0, "free", "Converter: no wait")
     for page in ("/", "/convert", "/import/epub"):
         html_ = client.get(page).get_data(as_text=True)
-        assert "Free right now" in html_ and 'href="/status"' in html_ and "status.js" in html_
+        assert "Converter: no wait" in html_ and 'href="/status"' in html_ and "status.js" in html_
     assert "No jobs in the last 24 hours" in client.get("/status").get_data(as_text=True)
 
     resp = post(client, ["epub"], vault=(io.BytesIO(zip_of_dir(TEMPLATE)), "v.zip"))

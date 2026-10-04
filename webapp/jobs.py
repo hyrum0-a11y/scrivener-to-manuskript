@@ -168,14 +168,14 @@ class JobQueue:
         work += sum(typical.get(k, 60) for k in waiting)
         wait = work / max(self.workers, 1)
         if len(waiting) >= self.limits.max_queued:
-            level, short = "full", "Full · try again soon"
-            label = "Full right now. Try again in a few minutes"
+            level, short = "full", "Converter: full · try again soon"
+            label = "Converter full right now. Try again in a few minutes"
         elif running or waiting:
-            level, short = "busy", f"Busy · ~{max(round(wait / 60), 1)} min wait"
-            label = (f"Busy: {len(running)} converting, {len(waiting)} waiting. "
+            level, short = "busy", f"Converter: {len(running) + len(waiting)} in line · ~{max(round(wait / 60), 1)} min"
+            label = (f"Converter busy: {len(running)} converting, {len(waiting)} waiting. "
                      f"New uploads start in {wait_label(wait)}")
         else:
-            level, short, label = "free", "Free right now", "Free right now. Your upload starts right away"
+            level, short, label = "free", "Converter: no wait", "No conversions in line. Yours starts right away"
         return {"running": len(running), "waiting": len(waiting), "wait_seconds": round(wait),
                 "level": level, "label": label, "short": short,
                 "running_jobs": [{"type": type_label(k), "seconds": round(age)} for k, age in running],
