@@ -183,11 +183,11 @@ def folder_parts(d: Path, prefix: str = "My Book") -> list:
 
 def test_home_lists_all_tools_in_groups(client):
     page = client.get("/").get_data(as_text=True)
-    for name in ("Starter vault", 'href="/starter-vault.zip"', "Obsidian → EPUB", "Obsidian → PDF", "Obsidian → ODT", "Scrivener → Obsidian", "EPUB → Obsidian",
+    for name in ("Starter vault", 'href="/starter-vault.zip"', "Obsidian → EPUB", "Obsidian → PDF", "Obsidian → Word", "Scrivener → Obsidian", "EPUB → Obsidian",
                  'href="/import/scrivener"', 'href="/import/epub"',
                  "Convert your Obsidian book", "Bring your work in", "Pick your vault"):
         assert name in page
-    assert page.count("Coming soon") == (1 if pdf_available() else 2)
+    assert page.count("Coming soon") == (0 if pdf_available() else 1)
 
 
 def test_old_addresses_redirect_and_preselect(client):
@@ -338,7 +338,7 @@ def test_hour_chart_geometry():
 def test_starter_vault_reads_both_book_info_blocks():
     from obsidian_book.epub import parse_book_info
     info = parse_book_info(TEMPLATE)
-    assert info["cover"] == "cover.jpg" and info["output_dir"] == "~/Downloads"
+    assert info["cover"] == "cover.jpg" and info["output_dir"] == ""   # blank: Downloads, for the CLI
     assert "trim_size" in info and "isbn" in info          # from the Optional block
     assert (TEMPLATE / "cover.jpg").is_file() and (TEMPLATE / "Start Here.md").is_file()
 

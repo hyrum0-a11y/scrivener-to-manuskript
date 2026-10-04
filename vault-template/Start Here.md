@@ -9,6 +9,7 @@ own writing.
 | Note or file | What it's for |
 |---|---|
 | **Book Info** | Title, author, cover and other details. Open it first. |
+| **Title Page** (in Front Matter) | Your book's title page, written the way you want it. |
 | **Manuscript Reading Order** | The order of everything in your book. |
 | **Manuscript** folder | Your story: one note per scene, in part and chapter folders. |
 | **Front Matter** folder | Pages before the story: **Information** (your copyright page) and acknowledgments. |
@@ -26,6 +27,17 @@ own writing.
 - Two hyphens `--` become a long dash (—) in the finished book.
 - Notes to yourself: anything between `%%` marks, like `%%check this date%%`,
   stays in the vault but is left out of the book. So is ~~struck-out text~~.
+
+## Your title page
+
+The **Title Page** note is your book's title page, and you decide what's on
+it. Each line is centred:
+
+- `# A line` is printed large (use two `#` lines for a two-line title).
+- `## A line` is medium, for a subtitle or "A Novel".
+- `### A line` is small, for a series line or your publisher.
+- A plain line is printed in bold, for your name.
+- Empty lines add space; `---` adds a small ornament.
 
 ## Front and back matter
 
@@ -69,13 +81,24 @@ Nothing else needs to change. If your cover has another name or is a
 ## Turning it into a book
 
 1. Go to **https://authortools.hyrumjones.com**.
-2. Choose **Obsidian → EPUB** (or PDF) and pick this vault's folder.
+2. Choose **Obsidian → EPUB**, **PDF** or **Word**, and pick this vault's
+   folder.
 3. The site checks your book first and lists anything to fix, then gives
    you the finished file to download.
 
-Converting on your own computer with the command-line tools instead? The
-finished books are saved to the folder named in **Book Info** under
-`output_dir` (your Downloads folder unless you change it).
+Want to fine-tune the layout yourself? Download the **Word** version. It's
+laid out like the print PDF (title page, contents, part pages, headers) and
+opens in Word, Google Docs, LibreOffice and Pages. Make your changes there,
+then export a PDF from that program. Keep writing in this vault, though:
+the next conversion starts fresh from your notes, so changes made in Word
+aren't carried back.
+
+For the intended look, install the free fonts
+[EB Garamond](https://fonts.google.com/specimen/EB+Garamond) and
+[Linux Biolinum](https://sourceforge.net/projects/linuxlibertine/). Without
+them, Word uses similar fonts. In LibreOffice, keep "Export automatically
+inserted blank pages" ticked when exporting a PDF, so parts start on
+right-hand pages.
 
 ## About this vault's Obsidian settings
 

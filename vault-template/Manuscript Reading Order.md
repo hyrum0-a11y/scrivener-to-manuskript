@@ -2,6 +2,7 @@
 
 *by Your Name*
 
+- [[Title Page]]  _Front Matter_
 - [[Information]]  _Front Matter_
 - [[Acknowledgments]]  _Front Matter_
 

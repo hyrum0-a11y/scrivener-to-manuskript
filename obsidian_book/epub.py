@@ -417,6 +417,49 @@ def find_orphaned_files(file_index: dict, referenced: set) -> list:
     return orphans
 
 
+TITLE_PAGE = "Title Page"  # a front-matter note with this title replaces the built-in title page
+
+
+def parse_title_page(body: str) -> list:
+    """The writer's Title Page note as [(kind, text)], kind one of "big"
+    (# line), "medium" (## line), "small" (### line), "normal" (plain line),
+    "space" (an empty line) or "rule" (--- or ***). Leading and trailing
+    empty lines are dropped; %%comments%% and ~~cuts~~ are removed."""
+    items = []
+    for raw in body.split("\n"):
+        if re.fullmatch(r"\s*(-{3,}|\*{3,}|_{3,})\s*", raw):
+            items.append(("rule", ""))
+            continue
+        line = re.sub(r"\s{2,}", " ", DASH_RE.sub("—", COMMENT_RE.sub("", CUT_SPAN_RE.sub("", raw)))).strip()
+        if not line:
+            items.append(("space", ""))
+        else:
+            m = re.match(r"(#{1,6})\s+(.*)", line)
+            if m:
+                kind = {1: "big", 2: "medium"}.get(len(m.group(1)), "small")
+                items.append((kind, m.group(2).strip()))
+            else:
+                items.append(("normal", line))
+    while items and items[0][0] == "space":
+        items.pop(0)
+    while items and items[-1][0] == "space":
+        items.pop()
+    return items
+
+
+def render_title_page(body: str) -> list:
+    """EPUB markdown for the writer's Title Page note (styled by epub_style.css)."""
+    lines = []
+    for kind, text in parse_title_page(body):
+        if kind == "space":
+            lines.append("::: {.tp-space}\n\u00a0\n:::")
+        elif kind == "rule":
+            lines.append("::: {.tp-rule}\n⁂\n:::")
+        else:
+            lines.append(f"::: {{.tp-{kind}}}\n{text}\n:::")
+    return [f"# {TITLE_PAGE} {{.hidden-title}}", "::: {.titlepage}\n" + "\n\n".join(lines) + "\n:::"]
+
+
 def render_front_back_item(title: str, body: str) -> list:
     """Render a Front/Back Matter item's markdown chunks per its title's
     house style (see CENTERED_HIDDEN_HEADING_TITLES / CENTERED_VISIBLE_HEADING_TITLES)."""
@@ -524,7 +567,7 @@ def build_document(vault: Path, book_info: dict) -> str:
 
     for fname in front_matter:
         title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
-        chunks.extend(render_front_back_item(title, body))
+        chunks.extend(render_title_page(body) if title == TITLE_PAGE else render_front_back_item(title, body))
 
     for part in parts:
         m = PART_TITLE_RE.match(part.title)

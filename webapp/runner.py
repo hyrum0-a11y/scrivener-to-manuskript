@@ -41,6 +41,9 @@ def builder(fmt: str):
     if fmt == "pdf":
         from obsidian_book.pdf import build_pdf  # heavy imports, only when needed
         return build_pdf
+    if fmt == "docx":
+        from obsidian_book.docx import build_docx
+        return build_docx
     return build_epub
 
 

@@ -130,6 +130,8 @@ from obsidian_book.epub import (
     strip_cuts,
     strip_frontmatter,
     resolve_output_dir,
+    TITLE_PAGE,
+    parse_title_page,
 )
 
 # Fonts shared with obsidian_to_pdf.py's build_css(), for a visual match.
@@ -603,26 +605,39 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
     series_position = book_info.get("series_position", "")
     series_length = book_info.get("series_length", "")
 
-    chunks.append(f'::: {{custom-style="TitleMain"}}\n{title_lines[0]}\n:::')
-    if title_lines[1]:
-        chunks.append(f'::: {{custom-style="TitleMain"}}\n{title_lines[1]}\n:::')
-    if subtitle:
-        chunks.append(f'::: {{custom-style="TitleSubtitle"}}\n{subtitle}\n:::')
-    chunks.append(f'::: {{custom-style="TitleAuthor"}}\n{author}\n:::')
-    if series_position and series_length:
-        dots = "".join(
-            "●" if i == int(series_position) else "○"
-            for i in range(1, int(series_length) + 1)
-        )
-        chunks.append(f'::: {{custom-style="TitleDots"}}\n{dots}\n:::')
+    front_items = [strip_frontmatter(resolve(f).read_text(encoding="utf-8")) for f in front_matter]
+    own_title_page = next((body for t, body in front_items if t == TITLE_PAGE), None)
+    if own_title_page is not None:  # the writer's Title Page note replaces the built-in one
+        styles = {"big": "TitleMain", "medium": "TitleSubtitle", "normal": "TitleAuthor", "small": "TitleDots"}
+        for kind, text in parse_title_page(own_title_page):
+            if kind == "space":
+                chunks.append(f'::: {{custom-style="TitleSubtitle"}}\n{BLANK_LINE}\n:::')
+            elif kind == "rule":
+                chunks.append('::: {custom-style="TitleDots"}\n⁂\n:::')
+            else:
+                chunks.append(f'::: {{custom-style="{styles[kind]}"}}\n{text}\n:::')
+    else:
+        chunks.append(f'::: {{custom-style="TitleMain"}}\n{title_lines[0]}\n:::')
+        if title_lines[1]:
+            chunks.append(f'::: {{custom-style="TitleMain"}}\n{title_lines[1]}\n:::')
+        if subtitle:
+            chunks.append(f'::: {{custom-style="TitleSubtitle"}}\n{subtitle}\n:::')
+        chunks.append(f'::: {{custom-style="TitleAuthor"}}\n{author}\n:::')
+        if series_position and series_length:
+            dots = "".join(
+                "●" if i == int(series_position) else "○"
+                for i in range(1, int(series_length) + 1)
+            )
+            chunks.append(f'::: {{custom-style="TitleDots"}}\n{dots}\n:::')
     # No marker needed here to break out of the title page: whatever comes
     # next always forces its own page break already — a hidden-bucket
     # front-matter item via the per-item PageBreak marker below, a
     # visible-bucket one or a chapter via Heading_20_2's break-before, or
     # (front matter empty) a Part via Heading_20_1's break-before.
 
-    for fname in front_matter:
-        fm_title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
+    for fm_title, body in front_items:
+        if fm_title == TITLE_PAGE:
+            continue  # already used as the title page
         if fm_title in CENTERED_HIDDEN_HEADING_TITLES:
             # No heading of its own to hang fo:break-before on — see
             # render_front_back_item_odt() — so force the page break with

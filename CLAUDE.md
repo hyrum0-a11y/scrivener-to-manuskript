@@ -1,12 +1,15 @@
 # CLAUDE.md
 
 ## Purpose
-Help authors write books in Obsidian and convert them to other formats. EPUB comes first, then PDF, and ODT last.
+Help authors write books in Obsidian and convert them to other formats. EPUB, PDF and Word (.docx) are on the site; ODT is a local-only script.
 The conversions run as free web tools at https://authortools.hyrumjones.com. The site runs on Rum's Akamai Linode
 (74.207.227.123, the same box as links.hyrumjones.com). The Obsidian plugin route was rejected; stick with the web tools.
 
 ## Layout
-- `obsidian_book/`: the converters (`epub.py`, `pdf.py`, `odt.py`) plus the `obsidian-book` CLI (`cli.py`).
+- `obsidian_book/`: the converters (`epub.py`, `pdf.py`, `docx.py`, `odt.py`) plus the `obsidian-book` CLI (`cli.py`).
+  `docx.py` = pandoc custom-style Markdown + XML post-processing (sections, headers, PAGEREF contents); no
+  LibreOffice. A front-matter note titled "Title Page" (epub.parse_title_page) replaces the built-in title page
+  in every format. Check LibreOffice renders with IsSkipEmptyPages=false or odd-page blanks vanish.
   Importers ("Bring your work in"): `from_epub.py` (any EPUB) and `from_scrivener.py` (.scriv) build a
   `Book` that `importer.py`'s `write_vault()` lays out as a vault. Their docstrings explain the structure guessing.
   Structure comes from the vault's `Manuscript Reading Order.md`; see the docstring at the top of `epub.py`.

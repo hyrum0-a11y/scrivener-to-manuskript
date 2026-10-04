@@ -4,6 +4,7 @@
     obsidian-book epub  <vault> [--output-dir DIR]
     obsidian-book pdf   <vault> [--output-dir DIR]
     obsidian-book odt   <vault> [--output-dir DIR]
+    obsidian-book docx  <vault> [--output-dir DIR]
 
 PDF and ODT pull in heavy optional dependencies (WeasyPrint, PyMuPDF,
 LibreOffice's uno), so their modules are only imported when that
@@ -50,7 +51,8 @@ def main(argv=None) -> None:
 
     for name, desc in [("epub", "compile to EPUB (needs pandoc)"),
                        ("pdf", "compile to a print-style PDF (needs the [pdf] extras)"),
-                       ("odt", "compile to an editable ODT manuscript (needs pandoc, LibreOffice, PyMuPDF)")]:
+                       ("odt", "compile to an editable ODT manuscript (needs pandoc, LibreOffice, PyMuPDF)"),
+                       ("docx", "compile to a Word document laid out like the print PDF (needs pandoc)")]:
         p = sub.add_parser(name, help=desc)
         p.add_argument("vault", help="path to the Obsidian vault")
         p.add_argument("--output-dir", help="override the vault's Book Info.md output_dir for this run")
@@ -65,6 +67,9 @@ def main(argv=None) -> None:
     try:
         if args.command == "check":
             check(args.vault)
+        elif args.command == "docx":
+            from obsidian_book.docx import build_docx
+            build_docx(args.vault, args.output_dir)
         else:
             build_epub(args.vault, args.output_dir)
     except BookError as e:

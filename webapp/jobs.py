@@ -27,9 +27,18 @@ JOB_ID_LEN = 32  # hex chars
 HISTORY_SECONDS = 24 * 3600
 # Seconds a job type takes before there's history to go on (measured on the
 # 1-CPU Linode: an EPUB in seconds, a Scrivener import ~10 s, a novel PDF 1-2 min).
-DEFAULT_SECONDS = {"epub": 10, "pdf": 90, "epub,pdf": 100, "import-epub": 15, "import-scrivener": 15}
-JOB_TYPE_LABELS = {"epub": "EPUB", "pdf": "PDF", "epub,pdf": "EPUB + PDF",
-                   "import-epub": "EPUB import", "import-scrivener": "Scrivener import"}
+FORMAT_SECONDS = {"epub": 10, "pdf": 90, "docx": 10}
+DEFAULT_SECONDS = {"import-epub": 15, "import-scrivener": 15}
+IMPORT_LABELS = {"import-epub": "EPUB import", "import-scrivener": "Scrivener import"}
+
+
+def type_label(kind: str) -> str:
+    """'epub,pdf' -> 'EPUB + PDF', 'docx' -> 'Word', 'import-epub' -> 'EPUB import'."""
+    return IMPORT_LABELS.get(kind) or " + ".join("Word" if f == "docx" else f.upper() for f in kind.split(","))
+
+
+def default_seconds(kind: str) -> float:
+    return DEFAULT_SECONDS.get(kind) or sum(FORMAT_SECONDS.get(f, 60) for f in kind.split(","))
 
 
 def job_type(st: dict) -> str:
@@ -55,6 +64,13 @@ class Limits:
     max_output_bytes: int = 200 * 2**20
     max_queued: int = 20
     keep_seconds: int = 3600
+
+
+class _Typical(dict):
+    """Measured median seconds per job type, falling back to estimates."""
+
+    def get(self, kind, default=None):
+        return super().get(kind) or default_seconds(kind)
 
 
 class QueueFull(Exception):
@@ -135,10 +151,8 @@ class JobQueue:
         there's history)."""
         with self._lock:
             history = list(self._history)
-        typical = dict(DEFAULT_SECONDS)
-        for kind in {h[1] for h in history}:
-            typical[kind] = statistics.median(h[2] for h in history if h[1] == kind)
-        return typical
+        typical = {kind: statistics.median(h[2] for h in history if h[1] == kind) for kind in {h[1] for h in history}}
+        return _Typical(typical)
 
     def snapshot(self) -> dict:
         """What the status badge and /queue show: counts, an estimated wait
@@ -164,8 +178,8 @@ class JobQueue:
             level, short, label = "free", "Free right now", "Free right now. Your upload starts right away"
         return {"running": len(running), "waiting": len(waiting), "wait_seconds": round(wait),
                 "level": level, "label": label, "short": short,
-                "running_jobs": [{"type": JOB_TYPE_LABELS.get(k, k), "seconds": round(age)} for k, age in running],
-                "waiting_jobs": [JOB_TYPE_LABELS.get(k, k) for k in waiting]}
+                "running_jobs": [{"type": type_label(k), "seconds": round(age)} for k, age in running],
+                "waiting_jobs": [type_label(k) for k in waiting]}
 
     def wait_before(self, job_id: str) -> int:
         """Estimated seconds until a waiting job starts."""
@@ -194,11 +208,10 @@ class JobQueue:
             hours.append({"start": start, "ok": sum(h[3] for h in in_hour),
                           "failed": sum(not h[3] for h in in_hour)})
         by_type = []
-        for kind, label in JOB_TYPE_LABELS.items():
+        for kind in sorted({h[1] for h in history}):
             done = [h for h in history if h[1] == kind]
-            if done:
-                by_type.append({"type": label, "count": len(done), "failed": sum(not h[3] for h in done),
-                                "typical": round(statistics.median(h[2] for h in done))})
+            by_type.append({"type": type_label(kind), "count": len(done), "failed": sum(not h[3] for h in done),
+                            "typical": round(statistics.median(h[2] for h in done))})
         return {"hours": hours, "by_type": by_type, "total": len(history),
                 "failed": sum(not h[3] for h in history)}
 

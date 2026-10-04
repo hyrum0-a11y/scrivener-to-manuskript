@@ -38,6 +38,9 @@ FORMATS = {
              "mimetype": "application/epub+zip"},
     "pdf": {"label": "Print PDF", "hint": "with part pages, drop caps and running headers",
             "mimetype": "application/pdf"},
+    "docx": {"label": "Word document (.docx)",
+             "hint": "laid out like the print PDF; opens in Word, Google Docs, LibreOffice and Pages",
+             "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
 }
 DOWNLOAD_MIMETYPES = {**{k: v["mimetype"] for k, v in FORMATS.items()}, "vault": "application/zip"}
 
@@ -68,8 +71,9 @@ def tool_groups() -> list:
              "desc": "Turn your Obsidian book vault into an e-book for Kindle, Apple Books, Kobo and other readers."},
             {"name": "Obsidian → PDF", "href": convert("pdf") if pdf_available() else None,
              "desc": "A print-ready PDF with part pages, drop caps and running headers."},
-            {"name": "Obsidian → ODT", "href": None,
-             "desc": "An editable manuscript you can open in LibreOffice or Word."},
+            {"name": "Obsidian → Word", "href": convert("docx"),
+             "desc": "A .docx laid out like the print PDF, to fine-tune in Word, Google Docs, LibreOffice "
+                     "or Pages and export your own PDF."},
         ]},
         {"title": "Bring your work in", "tools": [
             {"name": IMPORTS["scrivener"]["name"], "href": url_for("import_form", source="scrivener"),
@@ -130,7 +134,7 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
         return form(request.args.getlist("fmt"))
 
     # Old single-format addresses keep working.
-    @app.get("/<any(epub, pdf):fmt>")
+    @app.get("/<any(epub, pdf, docx):fmt>")
     def old_form(fmt):
         return redirect(url_for("convert_form", fmt=fmt), code=301)
 
@@ -215,7 +219,7 @@ def create_app(data_dir=None, limits: Limits | None = None, workers=None) -> Fla
                                wait=wait_label(jobs.wait_before(job_id)),
                                keep_minutes=jobs.limits.keep_seconds // 60)
 
-    @app.get("/jobs/<job_id>/<any(epub, pdf, vault):fmt>")
+    @app.get("/jobs/<job_id>/<any(epub, pdf, docx, vault):fmt>")
     def job_download(job_id, fmt):
         path = jobs.output_path(job_id, fmt)
         if path is None:

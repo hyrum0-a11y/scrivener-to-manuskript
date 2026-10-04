@@ -35,10 +35,15 @@
       {% if st.files %}
       <p class="downloads">
         {% for fmt in st.formats if st.files[fmt] %}
-        <a class="button" href="{{ url_for('job_download', job_id=job_id, fmt=fmt) }}">Download {{ 'vault (.zip)' if fmt == 'vault' else fmt | upper }}</a>
+        <a class="button" href="{{ url_for('job_download', job_id=job_id, fmt=fmt) }}">Download {{ {'vault': 'vault (.zip)', 'docx': 'Word (.docx)'}.get(fmt, fmt | upper) }}</a>
         {% endfor %}
       </p>
       <p class="muted small">Files are deleted from the server after {{ keep_minutes }} minutes.</p>
+      {% if st.files.docx %}<p class="muted small">The Word file uses the free fonts
+        <a href="https://fonts.google.com/specimen/EB+Garamond">EB Garamond</a> and
+        <a href="https://sourceforge.net/projects/linuxlibertine/">Linux Biolinum</a>; without them your program
+        substitutes similar ones. Word fills in the Contents page numbers when the file opens (say Yes if it asks
+        to update fields).</p>{% endif %}
       {% endif %}
     </div>
   </section>

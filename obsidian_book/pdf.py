@@ -60,7 +60,7 @@ from pathlib import Path
 import pymupdf as fitz
 import weasyprint
 
-from obsidian_book.epub import (BookError, load_vault, parse_reading_order, resolve_output_dir,
+from obsidian_book.epub import (TITLE_PAGE, BookError, parse_title_page, load_vault, parse_reading_order, resolve_output_dir,
                                 safe_filename)
 
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
@@ -266,6 +266,19 @@ def sign_images_for(pov: str, signs_dir, pov_sign: dict) -> list:
     return images
 
 
+def render_title_page(body: str) -> str:
+    """The writer's Title Page note (see epub.parse_title_page()) as the PDF title page."""
+    out = []
+    for kind, text in parse_title_page(body):
+        if kind == "space":
+            out.append('<p class="tp-space">&#160;</p>')
+        elif kind == "rule":
+            out.append('<p class="tp-rule">⁂</p>')
+        else:
+            out.append(f'<p class="tp-{kind}">{md_inline_to_html(text)}</p>')
+    return f'<section class="title-page noheader">{"".join(out)}</section>'
+
+
 def render_front_back_item(title: str, body: str) -> str:
     # Every front/back-matter item forces a right-hand-page start EXCEPT
     # Information, which just flows onto the next page after the title page
@@ -379,19 +392,20 @@ def build_html(vault: Path, book_info: dict) -> tuple:
             for i in range(1, int(series_length) + 1)
         )
         dots_html = f'<p class="title-dots">{dots}</p>'
-    sections.append(
-        '<section class="title-page noheader">'
-        f'<h1 class="title-main">{title_lines[0]}</h1>'
-        f'<h1 class="title-last">{title_lines[1]}</h1>'
-        f'<p class="title-subtitle">{html.escape(book_subtitle)}</p>'
-        f'<p class="title-author">{html.escape(author)}</p>'
-        f"{dots_html}"
-        "</section>"
-    )
+    front_items = [strip_frontmatter(resolve(f).read_text(encoding="utf-8")) for f in front_matter]
+    if not any(title == TITLE_PAGE for title, _ in front_items):  # else the writer's own note is used
+        sections.append(
+            '<section class="title-page noheader">'
+            f'<h1 class="title-main">{html.escape(title_lines[0])}</h1>'
+            f'<h1 class="title-last">{html.escape(title_lines[1])}</h1>'
+            f'<p class="title-subtitle">{html.escape(book_subtitle)}</p>'
+            f'<p class="title-author">{html.escape(author)}</p>'
+            f"{dots_html}"
+            "</section>"
+        )
 
-    for fname in front_matter:
-        title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
-        sections.append(render_front_back_item(title, body))
+    for title, body in front_items:
+        sections.append(render_title_page(body) if title == TITLE_PAGE else render_front_back_item(title, body))
 
     # Contents page — lists Parts only, with page numbers via target-counter()
     # A stand-in Part (chapters outside any Part heading) lists its chapters
@@ -627,6 +641,13 @@ h1, h2 {
   font-size: 13pt;
   margin-top: 0.9in;
 }
+/* The writer's Title Page note: # big, ## medium, ### small, plain normal. */
+.tp-big { font-family: 'Linux Biolinum O'; font-weight: bold; font-size: 30pt; letter-spacing: 6px; line-height: 1.15; }
+.tp-medium { font-family: 'EB Garamond'; font-style: italic; font-size: 15pt; }
+.tp-normal { font-family: 'Linux Biolinum O'; font-weight: bold; font-size: 13pt; }
+.tp-small { font-family: 'Linux Biolinum O'; font-size: 10pt; letter-spacing: 1px; }
+.tp-space { line-height: 1.6; }
+.tp-rule { margin: 0.1in 0; }
 .title-dots {
   font-size: 13pt;
   letter-spacing: 6px;

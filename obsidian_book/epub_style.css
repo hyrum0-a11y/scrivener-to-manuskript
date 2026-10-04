@@ -103,3 +103,14 @@ nav#toc ol {
   padding: 0;
   line-height: 1.5em;
 }
+
+/* The writer's Title Page note (see render_title_page()): # big, ## medium,
+   ### small, plain lines normal, empty lines as space, --- as an ornament. */
+.titlepage { text-align: center; margin-top: 3em; }
+.titlepage p { text-align: center; text-indent: 0; margin: 0; }
+.tp-big p { font-size: 2em; font-weight: bold; letter-spacing: 0.1em; line-height: 1.2; }
+.tp-medium p { font-size: 1.3em; font-style: italic; margin-top: 0.3em; }
+.tp-small p { font-size: 0.9em; letter-spacing: 0.05em; }
+.tp-normal p { font-size: 1.15em; font-weight: bold; }
+.tp-space p { line-height: 1.6em; }
+.tp-rule p { margin: 0.6em 0; }

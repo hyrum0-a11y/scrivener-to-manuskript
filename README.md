@@ -1,7 +1,7 @@
 # scrivener-to-manuskript
 
 Tools for moving a novel manuscript between **Scrivener 3**, **Manuskript**,
-**Obsidian**, and distributable **epub**/**PDF**/**ODT** output — built for
+**Obsidian**, and distributable **epub**/**PDF**/**Word (.docx)**/**ODT** output — built for
 migrating off Windows/Scrivener onto Linux while keeping a writable,
 plain-text source of truth.
 
@@ -178,6 +178,7 @@ obsidian-book check <vault>                    # dry run (same as --check below)
 obsidian-book epub  <vault> [--output-dir DIR]
 obsidian-book pdf   <vault> [--output-dir DIR] # needs the [pdf] extras
 obsidian-book odt   <vault> [--output-dir DIR] # needs LibreOffice + pymupdf
+obsidian-book docx  <vault> [--output-dir DIR] # needs pandoc
 ```
 
 pandoc still has to be installed separately (see Requirements). The code
@@ -200,6 +201,8 @@ python3 obsidian_to_epub.py <vault> --check
 ```
 python3 obsidian_to_pdf.py <vault> [--output-dir DIR]
 ```
+
+**`obsidian_to_docx.py`** — compiles the vault into a Word document laid out like the print PDF (trim size, mirrored margins, title page, contents with page numbers, part pages and first chapters on right-hand pages, alternating running headers left off chapter opening pages, raised initial caps). Opens in Word, Google Docs, LibreOffice and Pages for final hand-tweaking and PDF export. Needs only pandoc (no LibreOffice), so it also runs on the web tool. A front-matter note titled "Title Page" replaces the built-in title page in every format; see `vault-template/`.
 
 **`obsidian_to_odt.py`** — compiles the same vault into an ODT (OpenDocument Text) manuscript via pandoc, styled to match the PDF's page-type behavior exactly: a real title page, centered/hidden front matter, centered POV names, chapter dates, epigraphs, drop caps, every front/back-matter item/Part/chapter starting on its own page, an alternating left/right header (page number at the outer edge, author on left pages, book title on right pages — no footer) that only appears on manuscript-body continuation pages (never on the title page, front matter, a Part's own opening page, or a chapter's own opening page), page numbers that restart at 1 on the first Part, and every Part forced onto a right-hand page (inserting a real blank left page first if needed). Uses pandoc's `custom-style` mechanism for div/span-level formatting (unlike CSS-style `.classname` divs, which pandoc's ODT writer silently drops), ODF's native mirrored-page-style mechanism for the header alternation, a mid-document master-page switch — keyed off explicit pandoc heading ids, since `custom-style` doesn't apply to headings — for which pages get a header at all and where the count restarts (each chapter gets its own private master page so the header can be suppressed correctly on every chapter's own opening page, not just each Part's first), and a post-processing pass that drives a real headless LibreOffice instance to force correct Part-opener page placement, something no static ODF markup can express. Has its own independent renderer (not reused from `obsidian_to_epub.py`) since ODT styling works fundamentally differently from epub's CSS classes. Meant as an editable draft format for further work in a word processor, not a finished distributable. Requires a native LibreOffice install (not Flatpak) and `pymupdf`, in addition to pandoc — see the script's own module docstring for the full requirements and the debugging trail behind all of this.
 ```
