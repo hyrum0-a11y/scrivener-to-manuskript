@@ -212,7 +212,7 @@ def test_zip_upload_converts_and_shows_book(client, tmp_path):
     page = wait_for(client, job_url)
     assert "Download EPUB" in page, page
     assert "My Novel" in page and "Your Name" in page and "1 chapter" in page
-    assert "Book check passed" in page
+    assert "Worth a look" in page and "[Your Name]" in page   # starter text reminder, not a blocker
     epub = client.get(job_url + "/epub")
     assert zipfile.ZipFile(io.BytesIO(epub.data)).read("mimetype") == b"application/epub+zip"
     cover = client.get(job_url + "/cover")
@@ -226,7 +226,7 @@ def test_check_lists_broken_links_and_stops(client, tmp_path):
     order = vault / "Manuscript Reading Order.md"
     order.write_text(order.read_text() + "\n- [[Missing Scene]]\n")
     page = wait_for(client, post(client, ["epub"], files=folder_parts(vault)).headers["Location"])
-    assert "broken link" in page and "Missing Scene" in page and "Must fix" in page
+    assert "1 problem" in page and "Missing Scene" in page and "Must fix" in page
     assert "Download EPUB" not in page
 
 
@@ -363,3 +363,13 @@ def test_starter_vault_download_has_cover_and_guide(client):
     names = zipfile.ZipFile(io.BytesIO(client.get("/starter-vault.zip").data)).namelist()
     assert "My Book/cover.jpg" in names and "My Book/Start Here.md" in names
     assert "My Book/README.md" not in names
+
+
+def test_information_page_printed_as_written(tmp_path):
+    from obsidian_book.epub import build_document, load_vault
+    vault = make_vault(tmp_path)
+    info = vault / "Book Info.md"
+    info.write_text(info.read_text().replace('isbn: ""', 'isbn: "9781234567897"') + '\n```book-info\nseries: "X, Book 2"\n```\n')
+    doc = build_document(*load_vault(vault))
+    assert "[YOUR TITLE]" in doc and "ISBN (eBook): [ISBN]" in doc   # nothing filled in from Book Info
+    assert "X, Book 2" not in doc and "9781234567897" not in doc

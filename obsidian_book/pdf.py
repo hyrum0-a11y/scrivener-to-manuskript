@@ -64,7 +64,6 @@ from obsidian_book.epub import (BookError, load_vault, parse_reading_order, reso
                                 safe_filename)
 
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
-ISBN_EBOOK_RE = re.compile(r'^(ISBN \(eBook\):\s*).*$', re.MULTILINE)
 CUT_SPAN_RE = re.compile(r"~~.*?~~")
 COMMENT_RE = re.compile(r"%%.*?%%")
 DASH_RE = re.compile(r"-{2,}")  # Obsidian's editor won't accept a literal em
@@ -267,39 +266,6 @@ def sign_images_for(pov: str, signs_dir, pov_sign: dict) -> list:
     return images
 
 
-def apply_information_overrides(body: str, book_info: dict) -> str:
-    """For the "Information" front-matter item only: if Book Info.md declares
-    a 'series' field, that's treated as opting in to keeping Information.md's
-    opening two lines — the book title, then the series/book-number line —
-    and its "ISBN (eBook):" line in sync with Book Info.md automatically,
-    instead of hand-edited independently. Vaults with no 'series' field
-    (e.g. SS1/SS2) are returned unchanged — their Information.md pages
-    predate this convention and have their own hand-tuned formatting (e.g.
-    SS1's ISBN is written with dashes, which differs from Book Info.md's
-    plain-digit isbn field, so blindly syncing it there would corrupt it).
-    Same behavior as obsidian_to_epub.py's function of the same name — kept
-    in sync with it by hand since these are separate scripts."""
-    series = book_info.get("series", "")
-    if not series:
-        return body
-
-    lines = body.split("\n")
-    replacements = [book_info["title"].upper(), series]
-    idx = 0
-    for i, line in enumerate(lines):
-        if line.strip():
-            lines[i] = replacements[idx]
-            idx += 1
-            if idx == len(replacements):
-                break
-    body = "\n".join(lines)
-
-    isbn = book_info.get("isbn", "")
-    if isbn:
-        body = ISBN_EBOOK_RE.sub(lambda m: m.group(1) + isbn, body)
-    return body
-
-
 def render_front_back_item(title: str, body: str) -> str:
     # Every front/back-matter item forces a right-hand-page start EXCEPT
     # Information, which just flows onto the next page after the title page
@@ -425,8 +391,6 @@ def build_html(vault: Path, book_info: dict) -> tuple:
 
     for fname in front_matter:
         title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
-        if title == "Information":
-            body = apply_information_overrides(body, book_info)
         sections.append(render_front_back_item(title, body))
 
     # Contents page — lists Parts only, with page numbers via target-counter()

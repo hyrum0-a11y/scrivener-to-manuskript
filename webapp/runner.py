@@ -165,8 +165,8 @@ def run(job_dir: Path, formats: list, max_bytes: int, max_files: int) -> dict:
         result["book"] = book_details(vault, book_info)
         result["cover"] = copy_cover(vault, book_info, out_dir)
         if errors:
-            result["error"] = (f"Manuscript Reading Order.md has {errors} broken link(s), "
-                               f"listed below. Fix them and try again.")
+            result["error"] = (f"The book check found {errors} problem{'' if errors == 1 else 's'}, "
+                               f"listed below. Fix {'it' if errors == 1 else 'them'} and try again.")
             return result
 
         log = io.StringIO()

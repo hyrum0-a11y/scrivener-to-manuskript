@@ -11,7 +11,7 @@ own writing.
 | **Book Info** | Title, author, cover and other details. Open it first. |
 | **Manuscript Reading Order** | The order of everything in your book. |
 | **Manuscript** folder | Your story: one note per scene, in part and chapter folders. |
-| **Front Matter** folder | Pages before the story (copyright page, acknowledgments). |
+| **Front Matter** folder | Pages before the story: **Information** (your copyright page) and acknowledgments. |
 | **Back Matter** folder | Pages after the story (about the author). |
 | **cover.jpg** | An example cover. Replace it with your own (see below). |
 
@@ -26,6 +26,14 @@ own writing.
 - Two hyphens `--` become a long dash (—) in the finished book.
 - Notes to yourself: anything between `%%` marks, like `%%check this date%%`,
   stays in the vault but is left out of the book. So is ~~struck-out text~~.
+
+## Front and back matter
+
+**Information** is your copyright page, and **Acknowledgments** and **About
+the Author** are yours to write too. They're printed exactly as you write
+them: nothing on them is filled in for you, not even from Book Info. Replace
+everything in square brackets, like `[Your Name]` and `[Year]`, and any
+"Replace this" text. The book check reminds you if some is left.
 
 ## Adding scenes and chapters
 

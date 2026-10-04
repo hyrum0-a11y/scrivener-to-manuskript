@@ -293,7 +293,7 @@ def test_web_epub_import(client, tmp_path):
                        content_type="multipart/form-data")
     assert resp.status_code == 303
     page = wait_for(client, resp.headers["Location"])
-    assert "Download vault (.zip)" in page and "Book check passed" in page and "Next steps" in page, page
+    assert "Download vault (.zip)" in page and "Next steps" in page, page
     names = vault_names(client, resp.headers["Location"])
     assert "My Novel/Book Info.md" in names and "My Novel/Manuscript Reading Order.md" in names
 

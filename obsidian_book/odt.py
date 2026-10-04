@@ -119,7 +119,6 @@ from obsidian_book.epub import (
     CENTERED_HIDDEN_HEADING_TITLES,
     CENTERED_VISIBLE_HEADING_TITLES,
     PART_TITLE_RE,
-    apply_information_overrides,
     expand_paragraphs,
     find_orphaned_files,
     group_correspondence,
@@ -624,8 +623,6 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
 
     for fname in front_matter:
         fm_title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
-        if fm_title == "Information":
-            body = apply_information_overrides(body, book_info)
         if fm_title in CENTERED_HIDDEN_HEADING_TITLES:
             # No heading of its own to hang fo:break-before on — see
             # render_front_back_item_odt() — so force the page break with

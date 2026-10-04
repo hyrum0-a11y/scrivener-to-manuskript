@@ -36,7 +36,6 @@ Leave any of these as `""` if you don't need them.
 
 ```book-info
 isbn: ""
-series: ""
 subtitle: ""
 title_page_lines: ""
 series_position: ""
@@ -48,8 +47,6 @@ pov_signs: ""
 ```
 
 - **isbn**: your e-book ISBN, digits only.
-- **series**: the full second line for the title page and Information
-  page, for example `The Long Road, Book 2`.
 - **subtitle**: a subtitle line for the printed title page.
 - **title_page_lines**: the title split across lines on the printed title
   page, with `|` where each new line starts, for example `THE LONG|ROAD`.

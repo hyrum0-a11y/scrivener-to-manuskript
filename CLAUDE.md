@@ -16,7 +16,8 @@ The conversions run as free web tools at https://authortools.hyrumjones.com. The
   `/status` page with a 24-hour jobs chart; `jobs.py` keeps that history in memory (no titles, lost on restart). Import jobs use the format name `vault`; see `runner.py`.
 - `vault-template/`: starter vault for writers (plain-language `Start Here.md`, two-block `Book Info.md`, example
   `cover.jpg` from Through the Curtains). It must always compile; CI builds it. `cover:` is required in every vault;
-  a blank `output_dir:` means `~/Downloads`.
+  a blank `output_dir:` means `~/Downloads`. Front/back matter (incl. Information) is printed exactly as written;
+  the check warns (never blocks) when starter placeholder text like `[Your Name]` is left in.
 - `deploy/`: server setup (`DEPLOY.md`), systemd unit, nginx/Caddy config, `update.sh`.
 - `convert.py`, `epub_to_obsidian.py`, `make_obsidian_vault.py`: older one-off migration tools, superseded by
   the importers above.

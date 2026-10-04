@@ -61,22 +61,16 @@ Obsidian anywhere in the note):
     isbn: "9780997210712"
     cover: "SS1-final-ebook-small.jpg"
     output_dir: "/home/user/Books/MyNovel/exports"
-    series: "Cloud World, Book 2"
     ```
 
-title/author/author_file_as/publisher are required; isbn/cover/series may be
-left blank ("") if not applicable. cover is resolved relative to the vault
-root unless given as an absolute path. output_dir is the default
-destination; pass --output-dir to override it for a single run. If series
-is set, the vault's Front Matter "Information" note has its opening two
-lines rewritten at compile time to match Book Info.md: the book title
-(uppercased) on the first line, then series verbatim on the second — plus
-its "ISBN (eBook):" line synced to isbn — so those facts only need to be
-kept correct in this file, not hand-edited in Information.md too. series
-is written as-is, so it should read as the full second line, e.g. "The
-Saldari Theater, Book 1", not just the bare series name. Leave series blank
-to skip that rewrite entirely (Information.md is left untouched, as for
-SS1/SS2, whose Information pages predate this convention). This keeps the
+title/author/author_file_as/publisher/cover are required; isbn may be left
+blank (""). cover is resolved relative to the vault root unless given as an
+absolute path. output_dir is the default destination (blank means
+~/Downloads); pass --output-dir to override it for a single run. Several
+```book-info blocks in the note are read as one (the starter vault splits
+required and optional fields). Front and back matter, including the
+Information (copyright) page, are printed exactly as written: nothing in
+them is filled in from Book Info.md. This keeps the
 same script usable for every book — one vault, one Book Info.md, no
 per-book copy of this file.
 """
@@ -102,12 +96,11 @@ class BookError(Exception):
     return it to the uploader)."""
 
 BOOK_INFO_REQUIRED_KEYS = ("title", "author", "author_file_as", "publisher", "cover")
-BOOK_INFO_OPTIONAL_KEYS = {"isbn": "", "output_dir": "", "series": ""}
+BOOK_INFO_OPTIONAL_KEYS = {"isbn": "", "output_dir": ""}
 DEFAULT_OUTPUT_DIR = "~/Downloads"  # when Book Info.md's output_dir is blank
 
 BOOK_INFO_BLOCK_RE = re.compile(r"```book[- ]info\s*\n(.*?)```", re.DOTALL)
 BOOK_INFO_FIELD_RE = re.compile(r'^([a-z_]+):\s*"(.*)"\s*$', re.MULTILINE)
-ISBN_EBOOK_RE = re.compile(r'^(ISBN \(eBook\):\s*).*$', re.MULTILINE)
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
 CUT_SPAN_RE = re.compile(r"~~.*?~~")
 COMMENT_RE = re.compile(r"%%.*?%%")
@@ -424,38 +417,6 @@ def find_orphaned_files(file_index: dict, referenced: set) -> list:
     return orphans
 
 
-def apply_information_overrides(body: str, book_info: dict) -> str:
-    """For the "Information" front-matter item only: if Book Info.md declares
-    a 'series' field, that's treated as opting in to keeping Information.md's
-    opening two lines — the book title, then the series/book-number line —
-    and its "ISBN (eBook):" line in sync with Book Info.md automatically,
-    instead of hand-edited independently. Vaults with no 'series' field
-    (e.g. SS1/SS2) are returned unchanged — their Information.md pages
-    predate this convention and have their own hand-tuned formatting (e.g.
-    SS1's ISBN is written with dashes, which differs from Book Info.md's
-    plain-digit isbn field used for epub metadata, so blindly syncing it
-    there would corrupt it)."""
-    series = book_info.get("series", "")
-    if not series:
-        return body
-
-    lines = body.split("\n")
-    replacements = [book_info["title"].upper(), series]
-    idx = 0
-    for i, line in enumerate(lines):
-        if line.strip():
-            lines[i] = replacements[idx]
-            idx += 1
-            if idx == len(replacements):
-                break
-    body = "\n".join(lines)
-
-    isbn = book_info.get("isbn", "")
-    if isbn:
-        body = ISBN_EBOOK_RE.sub(lambda m: m.group(1) + isbn, body)
-    return body
-
-
 def render_front_back_item(title: str, body: str) -> list:
     """Render a Front/Back Matter item's markdown chunks per its title's
     house style (see CENTERED_HIDDEN_HEADING_TITLES / CENTERED_VISIBLE_HEADING_TITLES)."""
@@ -492,6 +453,22 @@ def resolve_cover(vault: Path, book_info: dict):
     return cover.resolve()
 
 
+# The starter vault's example text: a reminder (never an error) if it's still in the book.
+PLACEHOLDER_RE = re.compile(r"\[(YOUR TITLE|Your Name|Year|Month Year|ISBN|Your Publisher)\]|Replace this\b")
+PLACEHOLDER_BOOK_INFO = {"title": "My Novel", "author": "Your Name", "author_file_as": "Last, First"}
+
+
+def placeholder_leftovers(vault: Path, book_info: dict, notes: list) -> list:
+    """['Book Info.md: author is still "Your Name"', 'Front Matter/Information.md: [Year], ...']"""
+    found = [f'Book Info.md: {key} is still "{value}"' for key, value in PLACEHOLDER_BOOK_INFO.items()
+             if book_info.get(key) == value]
+    for path in notes:
+        hits = list(dict.fromkeys(m.group(0) for m in PLACEHOLDER_RE.finditer(path.read_text(encoding="utf-8"))))
+        if hits:
+            found.append(f"{path.relative_to(vault)}: {', '.join(hits)}")
+    return found
+
+
 def check_vault(vault: Path, book_info: dict) -> int:
     """Check the reading order against the vault and report problems.
     Returns the number of errors (missing linked files, a missing cover
@@ -519,6 +496,13 @@ def check_vault(vault: Path, book_info: dict) -> int:
         for p in sorted(orphans, key=lambda p: str(p.relative_to(vault))):
             print(f"  - {p.relative_to(vault)}")
 
+    leftovers = placeholder_leftovers(vault, book_info, [file_index[f] for f, _ in refs if f in file_index])
+    if leftovers:
+        print("WARNING: the starter vault's example text is still in your book. Replace it before "
+              "publishing:")
+        for item in leftovers:
+            print(f"  - {item}")
+
     cover = resolve_cover(vault, book_info)
     cover_missing = bool(cover) and not cover.is_file()
     if cover_missing:
@@ -540,8 +524,6 @@ def build_document(vault: Path, book_info: dict) -> str:
 
     for fname in front_matter:
         title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))
-        if title == "Information":
-            body = apply_information_overrides(body, book_info)
         chunks.extend(render_front_back_item(title, body))
 
     for part in parts:
@@ -621,7 +603,7 @@ def check(vault) -> None:
         print("WARNING: pandoc is not installed, so a real build would fail. "
               "Install it from https://pandoc.org/installing.html")
     if errors:
-        raise BookError(f"Check failed: {errors} broken link(s) in Manuscript Reading Order.md.")
+        raise BookError(f"Check failed: {errors} problem(s), listed above.")
     build_document(vault, book_info)  # exercises the renderer without pandoc
     print("Check passed: the vault is ready to compile.")
 
