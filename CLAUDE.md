@@ -12,6 +12,7 @@ The conversions run as free web tools at https://authortools.hyrumjones.com. The
   in every format. Check LibreOffice renders with IsSkipEmptyPages=false or odd-page blanks vanish.
   Book Info `scene_break` (default —※—; "blank" = one empty line) is printed between scenes in every format.
   Book Info `chapter_space_above` = empty body lines above chapter titles (EPUB/PDF/Word; blank = usual gap).
+  Book Info `header_left` / `header_right` (epub.page_headers; blank = AUTHOR / TITLE, old `running_header` = right).
   Importers ("Bring your work in"): `from_epub.py` (any EPUB) and `from_scrivener.py` (.scriv) build a
   `Book` that `importer.py`'s `write_vault()` lays out as a vault. Their docstrings explain the structure guessing.
   Structure comes from the vault's `Manuscript Reading Order.md`; see the docstring at the top of `epub.py`.

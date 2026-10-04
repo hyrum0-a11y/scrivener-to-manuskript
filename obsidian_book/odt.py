@@ -132,6 +132,7 @@ from obsidian_book.epub import (
     resolve_output_dir,
     TITLE_PAGE,
     line_groups,
+    page_headers,
     markdown_literal,
     scene_break,
     parse_title_page,
@@ -317,7 +318,7 @@ def patch_master_pages(xml: str, author: str, running_header: str, chapter_count
     mid-document master-page *switching* retarget_headings() does (a
     separate, previously-broken-by-a-placement-bug mechanism — see this
     module's docstring)."""
-    author_text = escape(author.upper())
+    author_text = escape(author)
     title_text = escape(running_header)
 
     # One shared paragraph style: a "center" tab stop for the centered
@@ -867,7 +868,7 @@ def _main(argv=None) -> None:
     book_info = parse_book_info(vault)
     output_dir = resolve_output_dir(book_info, args.output_dir)
 
-    running_header = book_info.get("running_header") or book_info["title"].upper()
+    header_left, running_header = page_headers(book_info)
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M")
     output = (output_dir / f"{book_info['title']}_{timestamp}.odt").resolve()
@@ -887,7 +888,7 @@ def _main(argv=None) -> None:
         tmp_path = Path(tmp_dir) / "book.md"
 
         print("Building reference styles...")
-        build_reference_odt(reference_odt, book_info["author"], running_header, chapter_count)
+        build_reference_odt(reference_odt, header_left, running_header, chapter_count)
         tmp_path.write_text(content, encoding="utf-8")
 
         # No --metadata title=/author= here: pandoc's default template turns

@@ -44,7 +44,8 @@ script additionally reads, all optional:
     series_position: "1"                  # title-page dot row: this book's position...
     series_length: "3"                    # ...out of this many (blank on either = no dot row)
     trim_size: "5.25in 8in"                # CSS @page size (width height); default "5.25in 8in"
-    running_header: "SILENT SUBVERSION 1" # chapter-page running header text; defaults to
+    header_left: "HYRUM JONES"            # left-page running header; defaults to the author in capitals
+    header_right: "SILENT SUBVERSION 1"   # right-page running header (older vaults: running_header); defaults to
                                            # title.upper() if not given
     pov_signs_dir: "/home/user/Books/MyNovel/pov-signs"
     pov_signs: "Gerald=Gerald-Sign.png, Taylor=Taylor-Sign.png"  # comma-separated name=file pairs
@@ -60,7 +61,7 @@ from pathlib import Path
 import pymupdf as fitz
 import weasyprint
 
-from obsidian_book.epub import (LINE_SPACING, TITLE_PAGE, BookError, chapter_space_above, line_groups, parse_title_page, scene_break, load_vault, parse_reading_order, resolve_output_dir,
+from obsidian_book.epub import (LINE_SPACING, TITLE_PAGE, BookError, chapter_space_above, line_groups, page_headers, parse_title_page, scene_break, load_vault, parse_reading_order, resolve_output_dir,
                                 safe_filename)
 
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
@@ -772,13 +773,18 @@ def margins_for_trim_size(trim_size: str) -> dict:
     }
 
 
-def build_css(trim_size: str, author: str, running_header: str) -> str:
+def _css_string(text: str) -> str:
+    """Text for inside a CSS "..." string."""
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def build_css(trim_size: str, header_left: str, header_right: str) -> str:
     margins = margins_for_trim_size(trim_size)
     return (
         CSS_TEMPLATE
         .replace("__TRIM_SIZE__", trim_size)
-        .replace("__AUTHOR__", author.upper())
-        .replace("__RUNNING_HEADER__", running_header)
+        .replace("__AUTHOR__", _css_string(header_left))
+        .replace("__RUNNING_HEADER__", _css_string(header_right))
         .replace("__MARGIN_OUTER__", margins["outer"])
         .replace("__MARGIN_INNER__", margins["inner"])
         .replace("__MARGIN_TOP__", margins["top"])
@@ -861,7 +867,6 @@ def build_pdf(vault, output_dir=None, *, untrusted: bool = False) -> Path:
     vault, book_info = load_vault(vault)
 
     trim_size = book_info.get("trim_size") or "5.25in 8in"
-    running_header = book_info.get("running_header") or book_info["title"].upper()
     if untrusted:
         signs = book_info.get("pov_signs_dir", "")
         if signs and (Path(signs).is_absolute() or ".." in Path(signs).parts):
@@ -880,7 +885,7 @@ def build_pdf(vault, output_dir=None, *, untrusted: bool = False) -> Path:
 
     print("Rendering PDF (weasyprint)...")
     fetcher = {"url_fetcher": _vault_only_fetcher(vault)} if untrusted else {}
-    css = build_css(trim_size, book_info["author"], running_header)
+    css = build_css(trim_size, *page_headers(book_info))
     space = chapter_space_above(book_info)
     if space is not None:  # empty body lines (10.5pt type) above each chapter title
         css += f"\n.chapter-heading {{ margin-top: {space * 10.5 * LINE_SPACING:.1f}pt; }}\n"

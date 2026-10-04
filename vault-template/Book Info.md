@@ -32,7 +32,8 @@ isbn: ""
 scene_break: "—※—"
 chapter_space_above: ""
 trim_size: ""
-running_header: ""
+header_left: ""
+header_right: ""
 pov_signs_dir: ""
 pov_signs: ""
 ```
@@ -48,8 +49,10 @@ pov_signs: ""
   on the page as many printed books do. Leave it as `""` for the usual small gap.
 - **trim_size**: the page size for the PDF and Word versions, for example `5.25in 8in` (the
   default) or `6in 9in`.
-- **running_header**: the text at the top of printed and Word pages, if it
-  should differ from the title.
+- **header_left**, **header_right**: the text at the top of left-hand and
+  right-hand pages in the PDF and Word versions, printed exactly as typed.
+  Leave them as `""` for your name (left) and the book's title (right), in
+  capitals.
 - **pov_signs_dir**, **pov_signs**: small symbols printed under the chapter
   title for each point-of-view character. `pov_signs_dir` is a folder of
   images inside the vault, for example `pov-signs`, and `pov_signs` pairs

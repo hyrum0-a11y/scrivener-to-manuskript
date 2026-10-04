@@ -181,3 +181,26 @@ def test_chapter_space_above(tmp_path):
     doc = pymupdf.open(pdf.build_pdf(v, tmp_path / "pdf0"))
     page = next(p for p in doc if p.get_text().strip().startswith("Chapter 1"))
     assert y_spaced - page.search_for("Chapter 1")[0].y0 > 50   # moved down by roughly 85pt - 0.3in
+
+
+def test_page_headers_defaults_and_fallback():
+    from obsidian_book.epub import page_headers
+    base = {"author": "Jane Smith", "title": "The Long Road"}
+    assert page_headers(base) == ("JANE SMITH", "THE LONG ROAD")
+    assert page_headers({**base, "running_header": "LONG ROAD 1"}) == ("JANE SMITH", "LONG ROAD 1")
+    assert page_headers({**base, "header_left": "Jane Smith", "header_right": 'The "Long" Road',
+                         "running_header": "ignored"}) == ("Jane Smith", 'The "Long" Road')
+
+
+@needs_pandoc
+def test_header_left_and_right_in_word_and_pdf(tmp_path):
+    v = vault_copy(tmp_path)
+    set_info(v, 'header_left: ""', 'header_left: "Jane Smith"')
+    set_info(v, 'header_right: ""', 'header_right: "The "Long" Road"')
+    parts = docx_parts(build_docx(v, tmp_path / "out"))
+    assert b"Jane Smith" in parts["word/headerAtEven.xml"] and b"YOUR NAME" not in parts["word/headerAtEven.xml"]
+    assert b"The &quot;Long&quot; Road" in parts["word/headerAtOdd.xml"] or b'The "Long" Road' in parts["word/headerAtOdd.xml"]
+    pdf = pytest.importorskip("obsidian_book.pdf")
+    import pymupdf
+    text = "".join(p.get_text() for p in pymupdf.open(pdf.build_pdf(v, tmp_path / "pdf")))
+    assert "Jane Smith" in text and 'The "Long" Road' in text.replace("“", '"').replace("”", '"')

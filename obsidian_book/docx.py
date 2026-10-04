@@ -17,8 +17,8 @@ Order.md). Layout, matching pdf.py:
   - each Part page and each Part's first chapter on a right-hand page (a
     blank page follows each Part page);
     page numbering starts at 1 on Part I;
-  - running headers on chapter pages (page number and author on left
-    pages, running header and page number on right pages), none on a
+  - running headers on chapter pages (page number and header_left on left
+    pages, header_right and page number on right pages), none on a
     chapter's opening page or on front/back matter;
   - a raised initial capital opening each chapter, Book Info.md's
     scene_break (default —※—) between scenes.
@@ -51,7 +51,7 @@ from xml.sax.saxutils import escape as xml_escape
 
 from obsidian_book.epub import (
     BLANK_LINE, CENTERED_HIDDEN_HEADING_TITLES, LINE_SPACING, chapter_space_above, PART_TITLE_RE, TITLE_PAGE, UNTRUSTED_FILTER, BookError,
-    check_vault, expand_paragraphs, line_groups, markdown_literal, scene_break, group_correspondence, index_vault_files, load_vault,
+    check_vault, expand_paragraphs, line_groups, markdown_literal, page_headers, scene_break, group_correspondence, index_vault_files, load_vault,
     parse_reading_order, parse_title_page, render_paragraph_groups, resolve_output_dir, safe_filename,
     split_first_paragraph, strip_cuts, strip_frontmatter,
 )
@@ -344,7 +344,7 @@ PAGE_FIELD = ('<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xm
               '<w:r><w:fldChar w:fldCharType="end"/></w:r>')
 
 
-def _headers(author: str, running_header: str, text_width: int) -> dict:
+def _headers(left: str, right: str, text_width: int) -> dict:
     tabs = (f'<w:tabs><w:tab w:val="center" w:pos="{text_width // 2}"/>'
             f'<w:tab w:val="right" w:pos="{text_width}"/></w:tabs>')
     ppr = f'<w:pPr><w:pStyle w:val="Header"/>{tabs}</w:pPr>'
@@ -352,8 +352,8 @@ def _headers(author: str, running_header: str, text_width: int) -> dict:
     text = lambda t: f'<w:r><w:t xml:space="preserve">{xml_escape(t)}</w:t></w:r>'
     return {
         "headerAtEmpty.xml": _header_xml('<w:p><w:pPr><w:pStyle w:val="Header"/></w:pPr></w:p>'),
-        "headerAtEven.xml": _header_xml(f"<w:p>{ppr}{PAGE_FIELD}{tab}{text(author.upper())}</w:p>"),
-        "headerAtOdd.xml": _header_xml(f"<w:p>{ppr}{tab}{text(running_header)}{tab}{PAGE_FIELD}</w:p>"),
+        "headerAtEven.xml": _header_xml(f"<w:p>{ppr}{PAGE_FIELD}{tab}{text(left)}</w:p>"),
+        "headerAtOdd.xml": _header_xml(f"<w:p>{ppr}{tab}{text(right)}{tab}{PAGE_FIELD}</w:p>"),
     }
 
 
@@ -375,7 +375,7 @@ def _sect_pr(section: Section, page: dict) -> str:
             f'{"<w:titlePg/>" if section.headers else ""}</w:sectPr>')
 
 
-def finish_docx(path: Path, sections: list, token: str, page: dict, book_info: dict, running_header: str) -> None:
+def finish_docx(path: Path, sections: list, token: str, page: dict, book_info: dict) -> None:
     """Edit the pandoc-written .docx in place: sections, headers, contents
     page numbers, mirrored margins, document properties."""
     with zipfile.ZipFile(path) as zf:
@@ -404,7 +404,7 @@ def finish_docx(path: Path, sections: list, token: str, page: dict, book_info: d
         '<w:r><w:fldChar w:fldCharType="end"/></w:r>'), doc)
     parts["word/document.xml"] = doc.encode("utf-8")
 
-    for name, data in _headers(book_info["author"], running_header, page["text_width"]).items():
+    for name, data in _headers(*page_headers(book_info), page["text_width"]).items():
         parts[f"word/{name}"] = data
     rels = parts["word/_rels/document.xml.rels"].decode("utf-8")
     rels = rels.replace("</Relationships>", "".join(
@@ -479,7 +479,6 @@ def build_docx(vault, output_dir=None, *, untrusted: bool = False) -> Path:
         if untrusted:
             raise BookError(f"ERROR: trim_size '{trim_size}' in Book Info.md should look like \"5.25in 8in\".")
         trim_size = DEFAULT_TRIM
-    running_header = book_info.get("running_header") or book_info["title"].upper()
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M")
     output = (resolve_output_dir(book_info, output_dir)
@@ -503,7 +502,7 @@ def build_docx(vault, output_dir=None, *, untrusted: bool = False) -> Path:
         raise BookError(f"pandoc error:\n{result.stderr}")
 
     print("Adding page layout (sections, headers, contents page numbers)...")
-    finish_docx(output, sections, token, page_layout(trim_size), book_info, running_header)
+    finish_docx(output, sections, token, page_layout(trim_size), book_info)
     print(f"Done. Written: {output}")
     return output
 

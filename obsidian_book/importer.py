@@ -278,7 +278,7 @@ def write_vault(book: Book, dest: Path) -> Path:
         "isbn": _quote(book.isbn), "cover": cover_name,
     }
     for key in ("output_dir", "series", "subtitle", "title_page_lines", "series_position",
-                "series_length", "trim_size", "running_header", "pov_signs_dir", "pov_signs"):
+                "series_length", "trim_size", "header_left", "header_right", "pov_signs_dir", "pov_signs"):
         fields[key] = ""
     info = "\n".join(f'{k}: "{v}"' for k, v in fields.items())
     (dest / "Book Info.md").write_text(

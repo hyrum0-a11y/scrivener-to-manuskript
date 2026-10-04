@@ -203,6 +203,17 @@ def scene_break(book_info: dict) -> str:
     return value or DEFAULT_SCENE_BREAK
 
 
+def page_headers(book_info: dict) -> tuple:
+    """(left-page header, right-page header) for the PDF, Word and ODT:
+    Book Info.md's header_left / header_right exactly as typed; blank means
+    the author's name / the title in capitals. An older vault's
+    running_header still sets the right-hand one."""
+    left = book_info.get("header_left", "").strip() or book_info["author"].upper()
+    right = (book_info.get("header_right", "").strip() or book_info.get("running_header", "").strip()
+             or book_info["title"].upper())
+    return left, right
+
+
 def chapter_space_above(book_info: dict):
     """Book Info.md's chapter_space_above: how many empty lines go above each
     chapter title, as an int, or None to keep each format's usual spacing."""
