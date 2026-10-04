@@ -60,7 +60,7 @@ from pathlib import Path
 import pymupdf as fitz
 import weasyprint
 
-from obsidian_book.epub import (TITLE_PAGE, BookError, parse_title_page, load_vault, parse_reading_order, resolve_output_dir,
+from obsidian_book.epub import (TITLE_PAGE, BookError, parse_title_page, scene_break, load_vault, parse_reading_order, resolve_output_dir,
                                 safe_filename)
 
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
@@ -492,7 +492,7 @@ def build_html(vault: Path, book_info: dict) -> tuple:
             for i, fname in enumerate(chapter.scenes):
                 scenes_html.append(render_scene(fname, resolve, is_first=(i == 0)))
                 if i < len(chapter.scenes) - 1:
-                    scenes_html.append('<p class="sep">—※—</p>')
+                    scenes_html.append(f'<p class="sep">{html.escape(scene_break(book_info))}</p>')
 
             sections.append(
                 f'<section class="chapter-page{recto_class}" id="{chapter_anchor}">'

@@ -96,7 +96,8 @@ class BookError(Exception):
     return it to the uploader)."""
 
 BOOK_INFO_REQUIRED_KEYS = ("title", "author", "author_file_as", "publisher", "cover")
-BOOK_INFO_OPTIONAL_KEYS = {"isbn": "", "output_dir": ""}
+BOOK_INFO_OPTIONAL_KEYS = {"isbn": "", "output_dir": "", "scene_break": ""}
+DEFAULT_SCENE_BREAK = "—※—"
 DEFAULT_OUTPUT_DIR = "~/Downloads"  # when Book Info.md's output_dir is blank
 
 BOOK_INFO_BLOCK_RE = re.compile(r"```book[- ]info\s*\n(.*?)```", re.DOTALL)
@@ -173,6 +174,17 @@ def strip_frontmatter(text: str) -> tuple[str, str]:
             title = m.group(1) if m else ""
             return title, text[end + 5:]
     return "", text
+
+
+def scene_break(book_info: dict) -> str:
+    """The symbol printed between scenes: Book Info.md's scene_break, else —※—."""
+    return book_info.get("scene_break", "").strip() or DEFAULT_SCENE_BREAK
+
+
+def markdown_literal(text: str) -> str:
+    """Text for pandoc Markdown with every punctuation mark backslash-escaped,
+    so a scene break like "* * *" or "#" prints as typed (not as a rule or heading)."""
+    return "".join("\\" + c if not c.isalnum() and not c.isspace() and ord(c) < 128 else c for c in text)
 
 
 def parse_book_info(vault: Path) -> dict:
@@ -612,7 +624,7 @@ def build_document(vault: Path, book_info: dict) -> str:
                 if rest:
                     chunks.append(group_correspondence(rest))
                 if i < len(scenes) - 1:
-                    chunks.append("::: {.sep}\n—※—\n:::")
+                    chunks.append(f"::: {{.sep}}\n{markdown_literal(scene_break(book_info))}\n:::")
 
     for fname in back_matter:
         title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))

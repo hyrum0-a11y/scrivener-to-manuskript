@@ -131,6 +131,8 @@ from obsidian_book.epub import (
     strip_frontmatter,
     resolve_output_dir,
     TITLE_PAGE,
+    markdown_literal,
+    scene_break,
     parse_title_page,
 )
 
@@ -690,7 +692,7 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
                 if rest:
                     chunks.append(group_correspondence(rest))
                 if i < len(scenes) - 1:
-                    chunks.append('::: {custom-style="Sep"}\n—※—\n:::')
+                    chunks.append(f'::: {{custom-style="Sep"}}\n{markdown_literal(scene_break(book_info))}\n:::')
 
     # Back matter switches back to the no-header "Standard" master page at
     # its own first item — a hidden-bucket item (no heading — see

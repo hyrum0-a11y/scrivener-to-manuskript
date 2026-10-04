@@ -29,6 +29,7 @@ Leave any of these as `""` if you don't need them.
 
 ```book-info
 isbn: ""
+scene_break: "—※—"
 trim_size: ""
 running_header: ""
 pov_signs_dir: ""
@@ -36,6 +37,10 @@ pov_signs: ""
 ```
 
 - **isbn**: your e-book ISBN, digits only.
+- **scene_break**: the symbol printed between scenes, in every format. Some
+  common choices: `—※—`, `* * *`, `#`, `⁂` or `~`. Each scene is its own note,
+  so you never type it in your writing: it's added between scenes for you.
+  Leave it as `""` to use `—※—`.
 - **trim_size**: the page size for the PDF and Word versions, for example `5.25in 8in` (the
   default) or `6in 9in`.
 - **running_header**: the text at the top of printed and Word pages, if it

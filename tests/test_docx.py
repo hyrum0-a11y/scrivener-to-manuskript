@@ -121,3 +121,22 @@ def test_web_word_download(tmp_path):
     assert "Download Word (.docx)" in page and "EB Garamond" in page, page
     doc = client.get(url + "/docx")
     assert doc.mimetype.endswith("wordprocessingml.document") and doc.data[:2] == b"PK"
+
+
+@needs_pandoc
+def test_scene_break_setting_in_every_format(tmp_path):
+    v = vault_copy(tmp_path)
+    scene = next((v / "Manuscript").rglob("*.md"))
+    shutil.copy(scene, scene.with_name("02 - Second Scene.md"))
+    order = v / "Manuscript Reading Order.md"
+    order.write_text(order.read_text().replace("- [[01 - Opening Scene]]", "- [[01 - Opening Scene]]\n- [[02 - Second Scene]]"))
+    info = v / "Book Info.md"
+    info.write_text(info.read_text().replace('scene_break: "—※—"', 'scene_break: "* * *"'))
+    doc = docx_parts(build_docx(v, tmp_path / "out"))["word/document.xml"].decode()
+    assert "* * *" in doc and "—※—" not in doc
+    with zipfile.ZipFile(build_epub(v, tmp_path / "out")) as zf:
+        text = "".join(zf.read(n).decode() for n in zf.namelist() if n.endswith(".xhtml"))
+    assert 'class="sep"' in text and "* * *" in text and "<hr" not in text
+    pdf = pytest.importorskip("obsidian_book.pdf")
+    from obsidian_book.epub import load_vault
+    assert '<p class="sep">* * *</p>' in pdf.build_html(*load_vault(v))[0]

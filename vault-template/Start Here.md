@@ -22,7 +22,8 @@ own writing.
 - Put **each paragraph on its own line**, with no empty line between
   paragraphs. The converter adds proper paragraph spacing and indents.
 - Don't type anything between scenes: the converter adds a scene-break
-  symbol between them for you.
+  symbol between them for you. It's `—※—` unless you choose another one
+  under `scene_break` in **Book Info** (for example `* * *` or `#`).
 - *Italics* and **bold** work as usual in Obsidian.
 - Two hyphens `--` become a long dash (—) in the finished book.
 - Notes to yourself: anything between `%%` marks, like `%%check this date%%`,
@@ -96,9 +97,25 @@ aren't carried back.
 For the intended look, install the free fonts
 [EB Garamond](https://fonts.google.com/specimen/EB+Garamond) and
 [Linux Biolinum](https://sourceforge.net/projects/linuxlibertine/). Without
-them, Word uses similar fonts. In LibreOffice, keep "Export automatically
-inserted blank pages" ticked when exporting a PDF, so parts start on
-right-hand pages.
+them, Word uses similar fonts.
+
+## Printing your book
+
+Printed books start the contents, each part, and each part's first chapter
+on a right-hand page, so some left-hand pages are left blank on purpose.
+Printers (and KDP or IngramSpark) need those blank pages to really be in
+the PDF you upload.
+
+1. **Simplest: use the PDF from the website.** Its blank pages are real
+   pages, ready to print.
+2. **Fine-tuned in Word?** Word's *Save as PDF* or *Export to PDF* keeps the
+   blank pages.
+3. **Using LibreOffice?** In *File → Export as PDF*, tick **Export
+   automatically inserted blank pages**. Without it, LibreOffice leaves them
+   out and parts can end up on left-hand pages. (LibreOffice shows these
+   pages on screen with a grey "blank page" label; that's normal.)
+4. **Google Docs** ignores right-hand page starts, so don't use it for the
+   final print PDF.
 
 ## About this vault's Obsidian settings
 

@@ -20,7 +20,8 @@ Order.md). Layout, matching pdf.py:
   - running headers on chapter pages (page number and author on left
     pages, running header and page number on right pages), none on a
     chapter's opening page or on front/back matter;
-  - a raised initial capital opening each chapter, —※— between scenes.
+  - a raised initial capital opening each chapter, Book Info.md's
+    scene_break (default —※—) between scenes.
 
 How: the vault becomes pandoc Markdown in which every paragraph carries a
 named Word style (pandoc's custom-style), pandoc writes the .docx using a
@@ -50,7 +51,7 @@ from xml.sax.saxutils import escape as xml_escape
 
 from obsidian_book.epub import (
     BLANK_LINE, CENTERED_HIDDEN_HEADING_TITLES, PART_TITLE_RE, TITLE_PAGE, UNTRUSTED_FILTER, BookError,
-    check_vault, expand_paragraphs, group_correspondence, index_vault_files, load_vault,
+    check_vault, expand_paragraphs, markdown_literal, scene_break, group_correspondence, index_vault_files, load_vault,
     parse_reading_order, parse_title_page, render_paragraph_groups, resolve_output_dir, safe_filename,
     split_first_paragraph, strip_cuts, strip_frontmatter,
 )
@@ -304,7 +305,7 @@ def build_markdown(vault: Path, book_info: dict, token: str) -> tuple:
                     doc.add(group_correspondence(rest).replace("::: {.correspondence}",
                                                                '::: {custom-style="Correspondence"}'))
                 if n < len(chapter.scenes) - 1:
-                    doc.add(_div("Sep", "—※—"))
+                    doc.add(_div("Sep", markdown_literal(scene_break(book_info))))
 
     for title, body in (read(f) for f in back_matter):
         front_back(title, body, "oddPage")

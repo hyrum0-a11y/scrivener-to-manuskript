@@ -10,6 +10,7 @@ The conversions run as free web tools at https://authortools.hyrumjones.com. The
   `docx.py` = pandoc custom-style Markdown + XML post-processing (sections, headers, PAGEREF contents); no
   LibreOffice. A front-matter note titled "Title Page" (epub.parse_title_page) replaces the built-in title page
   in every format. Check LibreOffice renders with IsSkipEmptyPages=false or odd-page blanks vanish.
+  Book Info `scene_break` (default —※—) is printed between scenes in every format.
   Importers ("Bring your work in"): `from_epub.py` (any EPUB) and `from_scrivener.py` (.scriv) build a
   `Book` that `importer.py`'s `write_vault()` lays out as a vault. Their docstrings explain the structure guessing.
   Structure comes from the vault's `Manuscript Reading Order.md`; see the docstring at the top of `epub.py`.
