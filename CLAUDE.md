@@ -17,7 +17,8 @@ The conversions run as free web tools at https://authortools.hyrumjones.com. The
   Structure comes from the vault's `Manuscript Reading Order.md`; see the docstring at the top of `epub.py`.
   Parts are optional. Chapters listed before any `# Part` heading compile with no Part page.
   Under a `#` part or `##` chapter heading, only `center:` / `left:` / `right:` lines print (Obsidian *italic*/**bold** kept);
-  other lines are ignored and listed by the check; `%%comments%%` (also multi-line) are stripped — the starter
+  other lines are ignored and listed by the check; a `#` line ending "Reading Order" is the note title, any other
+  `#` line is a part; `%%comments%%` (also multi-line) are stripped — the starter
   Reading Order ends with a `%%` help block. Chapter titles print as typed.
   TEMPORARY: `reading_order_is_legacy()` keeps the old positional POV/date lines and `>` epigraphs for Rum's
   unconverted vaults. Remove it once Rum has converted SilentSub1/2, Sky's the Limit and the Saldari vaults.

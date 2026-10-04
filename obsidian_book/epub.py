@@ -399,7 +399,6 @@ def parse_reading_order(path: Path):
 
     current_part = None
     current_chapter = None
-    past_title = False
 
     def heading_lines(i: int, target, is_chapter: bool) -> int:
         """Read the lines under a heading into target.lines / .ignored; return the next index."""
@@ -455,9 +454,8 @@ def parse_reading_order(path: Path):
             continue
 
         if stripped.startswith("# "):
-            if not past_title:
-                past_title = True
-                i += 1
+            if re.search(r"reading order\s*$", stripped, re.IGNORECASE):
+                i += 1  # the note's own title ("# My Book — Reading Order"), not a part
                 continue
             current_part = Part(title=stripped[2:].strip())
             parts.append(current_part)
@@ -588,6 +586,8 @@ def resolve_cover(vault: Path, book_info: dict):
 PLACEHOLDER_RE = re.compile(r"\[(YOUR TITLE|Your Name|Year|Month Year|ISBN|Your Publisher)\]|Replace this\b"
                             r"|Lorem ipsum|Nemo enim ipsam")
 PLACEHOLDER_BOOK_INFO = {"title": "My Novel", "author": "Your Name", "author_file_as": "Last, First"}
+# The starter Reading Order's example lines under its part and chapter titles.
+PLACEHOLDER_ORDER_RE = re.compile(r"Part I The Beginning|A short epigraph|can go here|\*\*Anna\*\*|London, 1952")
 
 
 def placeholder_leftovers(vault: Path, book_info: dict, notes: list) -> list:
@@ -598,6 +598,10 @@ def placeholder_leftovers(vault: Path, book_info: dict, notes: list) -> list:
         hits = list(dict.fromkeys(m.group(0) for m in PLACEHOLDER_RE.finditer(path.read_text(encoding="utf-8"))))
         if hits:
             found.append(f"{path.relative_to(vault)}: {', '.join(hits)}")
+    order = "\n".join(reading_order_lines(vault / "Manuscript Reading Order.md"))
+    hits = list(dict.fromkeys(m.group(0).strip("*") for m in PLACEHOLDER_ORDER_RE.finditer(order)))
+    if hits:
+        found.append(f"Manuscript Reading Order.md: the example lines {', '.join(hits)}")
     return found
 
 

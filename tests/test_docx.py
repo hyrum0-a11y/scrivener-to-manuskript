@@ -52,11 +52,12 @@ def test_docx_layout_of_starter_vault(tmp_path):
             xml.dom.minidom.parseString(data)  # every part well-formed
     doc = parts["word/document.xml"].decode()
     assert not re.search(r"AT[0-9a-f]{12}[SP]", doc)          # every stand-in replaced
-    # title page, Information, Acknowledgments, Contents, chapter (no parts), About the Author
-    assert doc.count("<w:sectPr") == 6
-    assert doc.count('<w:type w:val="oddPage"/>') == 4      # Acknowledgments, Contents, first chapter, back matter
-    assert '<w:pgNumType w:start="1"/>' in doc              # numbering starts at the first chapter
-    assert "[YOUR TITLE]" in doc and "PAGEREF chapter-1" in doc
+    # title page, Information, Acknowledgments, Contents, Part, chapter, About the Author
+    assert doc.count("<w:sectPr") == 7
+    assert doc.count('<w:type w:val="oddPage"/>') == 4      # Acknowledgments, Contents, Part, back matter
+    assert '<w:pgNumType w:start="1"/>' in doc              # numbering starts at Part I
+    assert "[YOUR TITLE]" in doc and "PAGEREF part-1" in doc
+    assert "Anna" in doc and "London, 1952" in doc
     assert 'w:styleId="DropcapLetter"' in parts["word/styles.xml"].decode()
     assert b"YOUR NAME" in parts["word/headerAtEven.xml"] and b"MY NOVEL" in parts["word/headerAtOdd.xml"]
     settings = parts["word/settings.xml"].decode()

@@ -1,12 +1,16 @@
-# My Novel — Reading Order
-
-*by Your Name*
-
 - [[Title Page]]  _Front Matter_
 - [[Information]]  _Front Matter_
 - [[Acknowledgments]]  _Front Matter_
 
+# Part I The Beginning
+%%Optional: the lines below print under the part title. Delete them if you don't want any. No parts in your book? Delete this whole part line too, and just list your chapters.%%
+center: *A short epigraph or quotation*
+center: *can go here*
+
 ## Chapter 1
+%%Optional: the lines below print under the chapter title, for example a character's name or a place and date. Delete them if you don't want any.%%
+center: **Anna**
+left: London, 1952
 - [[01 - Opening Scene]]
 - [[02 - Second Scene]]
 
@@ -19,9 +23,9 @@ This note sets what's in your book and in what order. What you can write:
 
 - [[Note name]]  _Front Matter_    a page before the story (Front Matter folder)
 - [[Note name]]  _Back Matter_     a page after the story (Back Matter folder)
+# Part title                        starts a part, with its own page (optional)
 ## Chapter title                    starts a chapter, printed exactly as typed
 - [[Note name]]                     a scene in the chapter above it, in order
-# Part title                        starts a part, with its own page (optional)
 
 Right under a part or chapter title, these lines print under the title:
 center: text                        centred

@@ -116,9 +116,15 @@ def test_untrusted_build_drops_server_files(tmp_path):
 
 
 def make_partless_vault(tmp_path):
-    """The starter vault, which has no Part heading: chapters sit directly
-    under the book, as in a novel with no part divisions."""
-    return make_vault(tmp_path)
+    """The starter vault with its Part heading (and the lines under it)
+    removed: chapters sit directly under the book, as in a novel with no
+    part divisions."""
+    v = make_vault(tmp_path)
+    order = v / "Manuscript Reading Order.md"
+    text = order.read_text()
+    start = text.index("# Part")
+    order.write_text(text[:start] + text[text.index("## ", start):])
+    return v
 
 
 def test_reading_order_without_parts_keeps_chapters(tmp_path):
@@ -424,3 +430,13 @@ def test_starter_reading_order_help_is_not_printed():
     from obsidian_book.epub import build_document, load_vault
     doc = build_document(*load_vault(TEMPLATE))
     assert "HOW THIS NOTE WORKS" not in doc and "centred" not in doc
+
+
+
+def test_title_line_only_skipped_when_it_says_reading_order(tmp_path):
+    from obsidian_book.epub import parse_reading_order
+    path = tmp_path / "Manuscript Reading Order.md"
+    path.write_text("# My Book — Reading Order\n\n# Part One\n## Chapter 1\n- [[a]]\n")
+    assert [p.title for p in parse_reading_order(path)[1]] == ["Part One"]
+    path.write_text("# Part One\n## Chapter 1\n- [[a]]\n")      # no title line at all
+    assert [p.title for p in parse_reading_order(path)[1]] == ["Part One"]

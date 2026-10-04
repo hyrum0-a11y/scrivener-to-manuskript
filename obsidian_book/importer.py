@@ -228,8 +228,6 @@ def write_vault(book: Book, dest: Path) -> Path:
         return stem
 
     order = [f"# {_quote(book.title)} — Reading Order", ""]
-    if book.author:
-        order += [f"*by {_quote(book.author)}*", ""]
 
     for item in book.front:
         stem = write_note(dest / "Front Matter", safe_name(item.title), item.title, "Front Matter", item.body)

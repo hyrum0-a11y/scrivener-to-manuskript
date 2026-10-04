@@ -100,7 +100,9 @@ what order. Folder names don't matter, only this note does.
 
 ### Optional extras
 
-Most books need nothing more than chapters and scenes. If you want more:
+The starter Reading Order shows a part and some lines under the part and
+chapter titles, so you can see how they look. Most books need nothing more
+than chapters and scenes: delete whatever you don't want. What's possible:
 
 - **Parts**: a line starting with `# ` begins a part, with its own page,
   for example `# Part I The Beginning`. Chapters listed under it belong to
