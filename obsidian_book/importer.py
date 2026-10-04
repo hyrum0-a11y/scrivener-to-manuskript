@@ -7,8 +7,8 @@ which lays the book out as a vault the converters in this package accept:
     Front Matter/<title>.md
     Manuscript/<NN - Part>/<NN - Chapter>/<NN-NN Scene>.md
     Back Matter/<title>.md
-    cover.<ext>                     (if the source had one)
-    .obsidian/                      (copied from vault-template, if present)
+    cover.<ext>                     (the source's, else vault-template's cover.jpg as a placeholder)
+    .obsidian/, Start Here.md       (copied from vault-template)
 
 Prose is written in the vault's convention: one paragraph per line, no blank
 line between paragraphs.
@@ -261,10 +261,15 @@ def write_vault(book: Book, dest: Path) -> Path:
 
     (dest / "Manuscript Reading Order.md").write_text("\n".join(order) + "\n", encoding="utf-8")
 
-    cover_name = ""
+    placeholder = VAULT_TEMPLATE / "cover.jpg"
     if book.cover and book.cover[0].lower() in COVER_TYPES:
         cover_name = "cover" + book.cover[0].lower()
         (dest / cover_name).write_bytes(book.cover[1])
+    elif placeholder.is_file():  # a cover is required; this one shows where it goes
+        cover_name = "cover.jpg"
+        shutil.copyfile(placeholder, dest / cover_name)
+    else:
+        raise BookError("The book has no cover image, and every vault needs one.")
 
     fields = {
         "title": _quote(book.title) or "Untitled",
@@ -279,9 +284,14 @@ def write_vault(book: Book, dest: Path) -> Path:
     info = "\n".join(f'{k}: "{v}"' for k, v in fields.items())
     (dest / "Book Info.md").write_text(
         "# Book Info\n\nThis book's details, used when converting it to EPUB, PDF or ODT. "
-        "Check the title, author and publisher.\n\n"
+        "Check the title, author and publisher."
+        + ("" if book.cover else " The cover is a placeholder: replace cover.jpg with your own cover "
+           "(same name), or put yours in this folder and change cover: to its file name.")
+        + "\n\n"
         f"```book-info\n{info}\n```\n", encoding="utf-8")
 
     if (VAULT_TEMPLATE / ".obsidian").is_dir():
         shutil.copytree(VAULT_TEMPLATE / ".obsidian", dest / ".obsidian")
+    if (VAULT_TEMPLATE / "Start Here.md").is_file():
+        shutil.copyfile(VAULT_TEMPLATE / "Start Here.md", dest / "Start Here.md")
     return dest

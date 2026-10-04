@@ -130,6 +130,7 @@ from obsidian_book.epub import (
     split_first_paragraph,
     strip_cuts,
     strip_frontmatter,
+    resolve_output_dir,
 )
 
 # Fonts shared with obsidian_to_pdf.py's build_css(), for a visual match.
@@ -847,10 +848,7 @@ def _main(argv=None) -> None:
         sys.exit(f"ERROR: {vault} does not look like a vault (no Manuscript/ folder)")
 
     book_info = parse_book_info(vault)
-    output_dir_str = args.output_dir or book_info["output_dir"]
-    if not output_dir_str:
-        sys.exit("ERROR: no output directory given — set output_dir in Book Info.md or pass --output-dir.")
-    output_dir = Path(output_dir_str).expanduser().resolve()
+    output_dir = resolve_output_dir(book_info, args.output_dir)
 
     running_header = book_info.get("running_header") or book_info["title"].upper()
 

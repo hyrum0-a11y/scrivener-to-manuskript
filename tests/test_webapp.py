@@ -88,7 +88,7 @@ def make_vault(tmp_path, cover="cover.png", extra=""):
     shutil.copytree(TEMPLATE, v)
     (v / "cover.png").write_bytes(PNG_1PX)
     info = v / "Book Info.md"
-    info.write_text(info.read_text().replace('cover: ""', f'cover: "{cover}"'))
+    info.write_text(info.read_text().replace('cover: "cover.jpg"', f'cover: "{cover}"'))
     scene = next((v / "Manuscript").rglob("*.md"))
     scene.write_text(scene.read_text() + extra)
     return v
@@ -331,3 +331,35 @@ def test_hour_chart_geometry():
     assert chart["top"] == 4 and len(chart["bars"]) == 24
     assert chart["bars"][0]["path"] == "" and chart["bars"][-1]["tip"] == "2 jobs in the last hour"
     assert chart["bars"][-2]["tip"] == "4 jobs 1 to 2 hours ago (1 failed)"
+
+
+# --- starter vault and Book Info rules ------------------------------------------
+
+def test_starter_vault_reads_both_book_info_blocks():
+    from obsidian_book.epub import parse_book_info
+    info = parse_book_info(TEMPLATE)
+    assert info["cover"] == "cover.jpg" and info["output_dir"] == "~/Downloads"
+    assert "trim_size" in info and "isbn" in info          # from the Optional block
+    assert (TEMPLATE / "cover.jpg").is_file() and (TEMPLATE / "Start Here.md").is_file()
+
+
+def test_cover_is_required(tmp_path):
+    from obsidian_book.epub import check_vault, load_vault
+    vault = make_vault(tmp_path, cover="")
+    with pytest.raises(BookError, match="Every book needs a cover"):
+        load_vault(vault)
+    shutil.rmtree(vault)
+    vault, info = load_vault(make_vault(tmp_path, cover="missing.jpg"))
+    assert check_vault(vault, info) == 1
+
+
+def test_blank_output_dir_means_downloads():
+    from obsidian_book.epub import resolve_output_dir
+    assert resolve_output_dir({"output_dir": ""}) == (Path.home() / "Downloads").resolve()
+    assert resolve_output_dir({"output_dir": "~/Books"}, "/tmp/x") == Path("/tmp/x").resolve()
+
+
+def test_starter_vault_download_has_cover_and_guide(client):
+    names = zipfile.ZipFile(io.BytesIO(client.get("/starter-vault.zip").data)).namelist()
+    assert "My Book/cover.jpg" in names and "My Book/Start Here.md" in names
+    assert "My Book/README.md" not in names

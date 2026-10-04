@@ -101,8 +101,9 @@ class BookError(Exception):
     The message is meant to be shown as-is (CLI prints it; a web tool can
     return it to the uploader)."""
 
-BOOK_INFO_REQUIRED_KEYS = ("title", "author", "author_file_as", "publisher")
-BOOK_INFO_OPTIONAL_KEYS = {"isbn": "", "cover": "", "output_dir": "", "series": ""}
+BOOK_INFO_REQUIRED_KEYS = ("title", "author", "author_file_as", "publisher", "cover")
+BOOK_INFO_OPTIONAL_KEYS = {"isbn": "", "output_dir": "", "series": ""}
+DEFAULT_OUTPUT_DIR = "~/Downloads"  # when Book Info.md's output_dir is blank
 
 BOOK_INFO_BLOCK_RE = re.compile(r"```book[- ]info\s*\n(.*?)```", re.DOTALL)
 BOOK_INFO_FIELD_RE = re.compile(r'^([a-z_]+):\s*"(.*)"\s*$', re.MULTILINE)
@@ -189,13 +190,16 @@ def parse_book_info(vault: Path) -> dict:
         raise BookError(f"ERROR: {path} not found — it holds this book's title/author/"
                         f"ISBN/cover/output_dir. See the module docstring for the format.")
     text = path.read_text(encoding="utf-8")
-    m = BOOK_INFO_BLOCK_RE.search(text)
-    if m is None:
+    blocks = BOOK_INFO_BLOCK_RE.findall(text)  # several blocks are read as one (e.g. required + optional)
+    if not blocks:
         raise BookError(f"ERROR: {path} has no ```book-info code block. "
                         f"See the module docstring for the format.")
-    info = {k: v for k, v in BOOK_INFO_FIELD_RE.findall(m.group(1))}
+    info = {k: v for block in blocks for k, v in BOOK_INFO_FIELD_RE.findall(block)}
 
     missing = [k for k in BOOK_INFO_REQUIRED_KEYS if not info.get(k)]
+    if missing == ["cover"]:
+        raise BookError(f"ERROR: cover is blank in {path}. Every book needs a cover: put your cover image "
+                        f'in the vault\'s top folder (e.g. cover.jpg) and set cover: "cover.jpg".')
     if missing:
         raise BookError(f"ERROR: {path} is missing required field(s): {', '.join(missing)}")
 
@@ -490,8 +494,8 @@ def resolve_cover(vault: Path, book_info: dict):
 
 def check_vault(vault: Path, book_info: dict) -> int:
     """Check the reading order against the vault and report problems.
-    Returns the number of errors (missing linked files); orphans and a
-    missing cover are warnings only."""
+    Returns the number of errors (missing linked files, a missing cover
+    image); notes left out of the reading order are warnings only."""
     reading_order_path = vault / "Manuscript Reading Order.md"
     if not reading_order_path.is_file():
         raise BookError(f"ERROR: {reading_order_path} not found — it defines the compile order.")
@@ -516,11 +520,12 @@ def check_vault(vault: Path, book_info: dict) -> int:
             print(f"  - {p.relative_to(vault)}")
 
     cover = resolve_cover(vault, book_info)
-    if cover and not cover.is_file():
-        print(f"WARNING: cover image '{book_info['cover']}' from Book Info.md was not "
-              f"found ({cover}); the epub will have no cover.")
+    cover_missing = bool(cover) and not cover.is_file()
+    if cover_missing:
+        print(f"ERROR: the cover image '{book_info['cover']}' named in Book Info.md isn't in the vault. "
+              f"Put your cover image in the vault's top folder and make cover: match its file name exactly.")
 
-    return len(missing)
+    return len(missing) + cover_missing
 
 
 def build_document(vault: Path, book_info: dict) -> str:
@@ -601,10 +606,9 @@ def load_vault(vault) -> tuple[Path, dict]:
 
 
 def resolve_output_dir(book_info: dict, output_dir=None) -> Path:
-    """The --output-dir override if given, else Book Info.md's output_dir."""
-    output_dir_str = str(output_dir) if output_dir else book_info["output_dir"]
-    if not output_dir_str:
-        raise BookError("ERROR: no output directory given — set output_dir in Book Info.md or pass --output-dir.")
+    """The --output-dir override if given, else Book Info.md's output_dir,
+    else the Downloads folder."""
+    output_dir_str = str(output_dir) if output_dir else (book_info["output_dir"] or DEFAULT_OUTPUT_DIR)
     return Path(output_dir_str).expanduser().resolve()
 
 

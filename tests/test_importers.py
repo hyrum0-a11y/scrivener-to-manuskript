@@ -65,7 +65,8 @@ def test_header_lines():
 
 # --- EPUB -----------------------------------------------------------------------------
 
-def make_epub(tmp_path, entries: list, files: dict, nested: dict | None = None, name="book.epub") -> Path:
+def make_epub(tmp_path, entries: list, files: dict, nested: dict | None = None, name="book.epub",
+              cover=True) -> Path:
     """A minimal EPUB 3: files {name: body html}, entries [(title, href)] in the
     nav (nested {title: [(title, href)]} for sub-entries), spine = files order."""
     def li(title, href):
@@ -78,8 +79,9 @@ def make_epub(tmp_path, entries: list, files: dict, nested: dict | None = None, 
     opf = ('<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Test Book</dc:title>'
            '<dc:creator>Ann Author</dc:creator><dc:identifier>urn:isbn:9781234567897</dc:identifier></metadata>'
-           f'<manifest><item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>'
-           f'<item id="cov" href="cover.png" properties="cover-image" media-type="image/png"/>{manifest}</manifest>'
+           '<manifest><item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>'
+           + (f'<item id="cov" href="cover.png" properties="cover-image" media-type="image/png"/>' if cover else "")
+           + f'{manifest}</manifest>'
            f'<spine>{spine}</spine></package>')
     path = tmp_path / name
     with zipfile.ZipFile(path, "w") as zf:
@@ -330,3 +332,13 @@ def test_web_bad_epub_reports_error(client):
                        content_type="multipart/form-data")
     page = wait_for(client, resp.headers["Location"])
     assert "isn't a valid EPUB" in page and "Try another file" in page
+
+
+@needs_pandoc
+def test_import_without_cover_gets_placeholder_and_guide(tmp_path):
+    files = {f"c{i}.xhtml": f"<h1>Chapter {i}</h1><p>{PROSE}</p>" for i in (1, 2)}
+    vault = import_epub(make_epub(tmp_path, [], files, cover=False), tmp_path / "v")
+    assert_compiles(vault)
+    assert (vault / "cover.jpg").read_bytes() == (TEMPLATE / "cover.jpg").read_bytes()
+    assert "The cover is a placeholder" in (vault / "Book Info.md").read_text()
+    assert (vault / "Start Here.md").is_file()

@@ -107,7 +107,7 @@ everything comes from two files at the vault root.
 a real (if tiny) vault in this exact convention, complete with a working
 Obsidian setup (theme, plugins, editor preferences), that compiles as-is.
 Copy it, edit `Book Info.md` and `Manuscript Reading Order.md`, and start
-writing. See its own README for details.
+writing. Its `Start Here.md` note explains everything in plain language.
 
 ### The vault convention
 
