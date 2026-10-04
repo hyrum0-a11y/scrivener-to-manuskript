@@ -30,6 +30,39 @@ own writing.
 - Notes to yourself: anything between `%%` marks, like `%%check this date%%`,
   stays in the vault but is left out of the book. So is ~~struck-out text~~.
 
+## How your finished book looks
+
+Your notes in Obsidian are for writing; the converter does the typesetting.
+So the EPUB, PDF and Word versions won't look exactly like your notes.
+What it does for you:
+
+- **Paragraphs**: indented, with no gap between them. The first paragraph
+  of a chapter and the first one after a scene break aren't indented.
+- **Chapter openings**: each chapter starts on a new page, its title
+  exactly as typed in the Reading Order, and its first paragraph opens
+  with a large capital letter.
+- **Scene breaks**: the `scene_break` symbol from Book Info goes between
+  scenes (`—※—` unless you choose another).
+- **Punctuation**: straight quotes become curly quotes, and `--` becomes a
+  long dash (—).
+- **Messages and letters**: a paragraph written entirely in italics, like a
+  text message or a note (it can start with a name, as in
+  `Anna: *Running late*`), is set apart without an indent.
+- **Left out**: `%%notes%%` and ~~struck-out text~~.
+- **PDF and Word only**: justified text, page numbers and running headers
+  (your name on left pages, the title on right pages, none on chapter
+  opening pages), a contents page, and parts and the first chapter of
+  each part starting on a right-hand page.
+- **Front and back matter** (Information, Acknowledgments, About the
+  Author): centred.
+
+On an e-reader, the reader's own settings (font, size, margins) also
+change how the EPUB looks.
+
+Want something laid out differently? Download the **Word** version, make
+your changes there, and export your own PDF. (Changes made in Word stay in
+that file: the next conversion starts fresh from your notes.)
+
 ## Your title page
 
 The **Title Page** note is your book's title page, and you decide what's on
