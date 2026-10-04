@@ -209,9 +209,9 @@ def chapter_space_above(book_info: dict):
     value = book_info.get("chapter_space_above", "").strip()
     if not value:
         return None
-    if not value.isdigit() or int(value) > 40:
+    if not value.isdigit() or int(value) > 12:
         raise BookError(f"ERROR: chapter_space_above in Book Info.md should be a number of empty lines "
-                        f"between 0 and 40, like \"5\" (it's \"{value}\").")
+                        f"from 0 to 12, like \"5\" (it's \"{value}\").")
     return int(value)
 
 
@@ -585,7 +585,8 @@ def resolve_cover(vault: Path, book_info: dict):
 
 
 # The starter vault's example text: a reminder (never an error) if it's still in the book.
-PLACEHOLDER_RE = re.compile(r"\[(YOUR TITLE|Your Name|Year|Month Year|ISBN|Your Publisher)\]|Replace this\b")
+PLACEHOLDER_RE = re.compile(r"\[(YOUR TITLE|Your Name|Year|Month Year|ISBN|Your Publisher)\]|Replace this\b"
+                            r"|Lorem ipsum|Nemo enim ipsam")
 PLACEHOLDER_BOOK_INFO = {"title": "My Novel", "author": "Your Name", "author_file_as": "Last, First"}
 
 

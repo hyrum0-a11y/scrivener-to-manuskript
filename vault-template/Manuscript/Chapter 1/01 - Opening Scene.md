@@ -3,5 +3,6 @@ title: "Opening Scene"
 section: "Manuscript"
 uuid: "00000000-0000-0000-0000-000000000000"
 ---
-Replace this paragraph with your opening scene's prose. Note that each paragraph sits on its own line with no blank line between them — that's this vault's convention, and obsidian_to_epub.py/obsidian_to_pdf.py/obsidian_to_odt.py all expect it when re-inserting proper paragraph breaks at compile time.
-A second placeholder paragraph, just to show that convention holding across more than one paragraph.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.

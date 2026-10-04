@@ -8,6 +8,7 @@
 
 ## Chapter 1
 - [[01 - Opening Scene]]
+- [[02 - Second Scene]]
 
 - [[About the Author]]  _Back Matter_
 

@@ -126,7 +126,7 @@ def test_reading_order_without_parts_keeps_chapters(tmp_path):
     _, parts, _ = parse_reading_order(make_partless_vault(tmp_path) / "Manuscript Reading Order.md")
     assert len(parts) == 1 and parts[0].implicit
     assert [c.title for c in parts[0].chapters] == ["Chapter 1"]
-    assert parts[0].chapters[0].scenes == ["01 - Opening Scene"]
+    assert parts[0].chapters[0].scenes == ["01 - Opening Scene", "02 - Second Scene"]
 
 
 @needs_pandoc

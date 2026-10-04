@@ -126,10 +126,6 @@ def test_web_word_download(tmp_path):
 @needs_pandoc
 def test_scene_break_setting_in_every_format(tmp_path):
     v = vault_copy(tmp_path)
-    scene = next((v / "Manuscript").rglob("*.md"))
-    shutil.copy(scene, scene.with_name("02 - Second Scene.md"))
-    order = v / "Manuscript Reading Order.md"
-    order.write_text(order.read_text().replace("- [[01 - Opening Scene]]", "- [[01 - Opening Scene]]\n- [[02 - Second Scene]]"))
     info = v / "Book Info.md"
     info.write_text(info.read_text().replace('scene_break: "—※—"', 'scene_break: "* * *"'))
     doc = docx_parts(build_docx(v, tmp_path / "out"))["word/document.xml"].decode()
@@ -147,10 +143,6 @@ def test_blank_scene_break(tmp_path):
     from obsidian_book.epub import scene_break
     assert scene_break({"scene_break": "blank"}) == " " and scene_break({"scene_break": ""}) == "—※—"
     v = vault_copy(tmp_path)
-    scene = next((v / "Manuscript").rglob("*.md"))
-    shutil.copy(scene, scene.with_name("02 - Second Scene.md"))
-    order = v / "Manuscript Reading Order.md"
-    order.write_text(order.read_text().replace("- [[01 - Opening Scene]]", "- [[01 - Opening Scene]]\n- [[02 - Second Scene]]"))
     info = v / "Book Info.md"
     info.write_text(info.read_text().replace('scene_break: "—※—"', 'scene_break: "blank"'))
     doc = docx_parts(build_docx(v, tmp_path / "out"))["word/document.xml"].decode()
@@ -167,8 +159,9 @@ def set_info(v: Path, old: str, new: str) -> None:
 def test_chapter_space_above(tmp_path):
     from obsidian_book.epub import BookError, chapter_space_above
     assert chapter_space_above({"chapter_space_above": ""}) is None and chapter_space_above({"chapter_space_above": "5"}) == 5
-    with pytest.raises(BookError, match="number of empty lines"):
-        chapter_space_above({"chapter_space_above": "lots"})
+    for bad in ("lots", "13"):
+        with pytest.raises(BookError, match="number of empty lines"):
+            chapter_space_above({"chapter_space_above": bad})
     v = vault_copy(tmp_path)
     set_info(v, 'chapter_space_above: ""', 'chapter_space_above: "6"')
     styles = docx_parts(build_docx(v, tmp_path / "out"))["word/styles.xml"].decode()
