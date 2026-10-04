@@ -492,7 +492,9 @@ def build_html(vault: Path, book_info: dict) -> tuple:
             for i, fname in enumerate(chapter.scenes):
                 scenes_html.append(render_scene(fname, resolve, is_first=(i == 0)))
                 if i < len(chapter.scenes) - 1:
-                    scenes_html.append(f'<p class="sep">{html.escape(scene_break(book_info))}</p>')
+                    sep = scene_break(book_info)
+                    css = "sep-blank" if sep == "\u00a0" else "sep"
+                    scenes_html.append(f'<p class="{css}">{html.escape(sep)}</p>')
 
             sections.append(
                 f'<section class="chapter-page{recto_class}" id="{chapter_anchor}">'
@@ -727,6 +729,8 @@ h1, h2 {
   text-indent: 0;
   margin: 0.18in 0;
 }
+
+.sep-blank { text-indent: 0; margin: 0; }
 
 .correspondence {
   margin: 0.15in 0;

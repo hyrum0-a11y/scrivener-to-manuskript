@@ -38,7 +38,8 @@ pov_signs: ""
 
 - **isbn**: your e-book ISBN, digits only.
 - **scene_break**: the symbol printed between scenes, in every format. Some
-  common choices: `—※—`, `* * *`, `#`, `⁂` or `~`. Each scene is its own note,
+  common choices: `—※—`, `* * *`, `#`, `⁂` or `~`. For just an empty line
+  between scenes, write `blank`. Each scene is its own note,
   so you never type it in your writing: it's added between scenes for you.
   Leave it as `""` to use `—※—`.
 - **trim_size**: the page size for the PDF and Word versions, for example `5.25in 8in` (the

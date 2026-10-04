@@ -114,3 +114,6 @@ nav#toc ol {
 .tp-normal p { font-size: 1.15em; font-weight: bold; }
 .tp-space p { line-height: 1.6em; }
 .tp-rule p { margin: 0.6em 0; }
+
+/* scene_break: "blank" — just one empty line between scenes */
+.sep-blank p { margin: 0; text-indent: 0; }

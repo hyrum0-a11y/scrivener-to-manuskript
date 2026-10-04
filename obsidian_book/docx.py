@@ -136,6 +136,7 @@ def style_xml() -> str:
         _style("DropcapLetter", rpr=_font(BODY_FONT) + pt(31.5), based_on="DefaultParagraphFont", kind="character"),
         _style("Noindent", NO_INDENT),
         _style("Sep", _spacing(259, 259) + CENTER),
+        _style("SepBlank", _spacing(0, 0) + NO_INDENT),
         _style("BlankPage", "<w:pageBreakBefore/>" + NO_INDENT),
         _style("Correspondence", "<w:contextualSpacing/>" + _spacing(216, 216) + NO_INDENT),
         # Stand-ins replaced by build_docx()
@@ -305,7 +306,8 @@ def build_markdown(vault: Path, book_info: dict, token: str) -> tuple:
                     doc.add(group_correspondence(rest).replace("::: {.correspondence}",
                                                                '::: {custom-style="Correspondence"}'))
                 if n < len(chapter.scenes) - 1:
-                    doc.add(_div("Sep", markdown_literal(scene_break(book_info))))
+                    sep = scene_break(book_info)
+                    doc.add(_div("SepBlank" if sep == BLANK_LINE else "Sep", markdown_literal(sep)))
 
     for title, body in (read(f) for f in back_matter):
         front_back(title, body, "oddPage")

@@ -177,8 +177,12 @@ def strip_frontmatter(text: str) -> tuple[str, str]:
 
 
 def scene_break(book_info: dict) -> str:
-    """The symbol printed between scenes: Book Info.md's scene_break, else —※—."""
-    return book_info.get("scene_break", "").strip() or DEFAULT_SCENE_BREAK
+    """The symbol printed between scenes: Book Info.md's scene_break, else —※—.
+    "blank" means just an empty line (a non-breaking space, so it isn't dropped)."""
+    value = book_info.get("scene_break", "").strip()
+    if value.lower() in ("blank", "blank line", "empty", "space"):
+        return BLANK_LINE
+    return value or DEFAULT_SCENE_BREAK
 
 
 def markdown_literal(text: str) -> str:
@@ -624,7 +628,9 @@ def build_document(vault: Path, book_info: dict) -> str:
                 if rest:
                     chunks.append(group_correspondence(rest))
                 if i < len(scenes) - 1:
-                    chunks.append(f"::: {{.sep}}\n{markdown_literal(scene_break(book_info))}\n:::")
+                    sep = scene_break(book_info)
+                    css = "sep-blank" if sep == BLANK_LINE else "sep"
+                    chunks.append(f"::: {{.{css}}}\n{markdown_literal(sep)}\n:::")
 
     for fname in back_matter:
         title, body = strip_frontmatter(resolve(fname).read_text(encoding="utf-8"))

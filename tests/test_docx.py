@@ -140,3 +140,19 @@ def test_scene_break_setting_in_every_format(tmp_path):
     pdf = pytest.importorskip("obsidian_book.pdf")
     from obsidian_book.epub import load_vault
     assert '<p class="sep">* * *</p>' in pdf.build_html(*load_vault(v))[0]
+
+
+@needs_pandoc
+def test_blank_scene_break(tmp_path):
+    from obsidian_book.epub import scene_break
+    assert scene_break({"scene_break": "blank"}) == " " and scene_break({"scene_break": ""}) == "—※—"
+    v = vault_copy(tmp_path)
+    scene = next((v / "Manuscript").rglob("*.md"))
+    shutil.copy(scene, scene.with_name("02 - Second Scene.md"))
+    order = v / "Manuscript Reading Order.md"
+    order.write_text(order.read_text().replace("- [[01 - Opening Scene]]", "- [[01 - Opening Scene]]\n- [[02 - Second Scene]]"))
+    info = v / "Book Info.md"
+    info.write_text(info.read_text().replace('scene_break: "—※—"', 'scene_break: "blank"'))
+    doc = docx_parts(build_docx(v, tmp_path / "out"))["word/document.xml"].decode()
+    sep = re.search(r'<w:pStyle w:val="SepBlank"\s*/>.*?</w:p>', doc, re.S).group(0)
+    assert " " in sep and "—※—" not in doc and "blank" not in sep

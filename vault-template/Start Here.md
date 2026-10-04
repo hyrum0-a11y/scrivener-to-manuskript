@@ -23,7 +23,8 @@ own writing.
   paragraphs. The converter adds proper paragraph spacing and indents.
 - Don't type anything between scenes: the converter adds a scene-break
   symbol between them for you. It's `—※—` unless you choose another one
-  under `scene_break` in **Book Info** (for example `* * *` or `#`).
+  under `scene_break` in **Book Info** (for example `* * *` or `#`, or
+  `blank` for just an empty line).
 - *Italics* and **bold** work as usual in Obsidian.
 - Two hyphens `--` become a long dash (—) in the finished book.
 - Notes to yourself: anything between `%%` marks, like `%%check this date%%`,
