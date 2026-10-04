@@ -149,19 +149,36 @@ CENTERED_VISIBLE_HEADING_TITLES = {"About the Author", "Continue Reading"}
 @dataclass
 class Chapter:
     title: str
-    pov: str = ""
-    subtitle_lines: list = field(default_factory=list)
+    lines: list = field(default_factory=list)    # [("center" | "left", text)] printed under the title
     scenes: list = field(default_factory=list)
+    ignored: list = field(default_factory=list)  # unlabelled lines left out (see parse_reading_order)
+
+    @property
+    def pov(self) -> str:
+        """The first centred line without its formatting (e.g. for POV sign images)."""
+        return next((re.sub(r"[*_]", "", t).strip() for align, t in self.lines if align == "center"), "")
 
 
 @dataclass
 class Part:
     title: str
-    epigraph: list = field(default_factory=list)
+    lines: list = field(default_factory=list)    # [("center" | "left", text)] printed under the title
     chapters: list = field(default_factory=list)
     # True for the stand-in Part holding chapters listed before any Part
     # heading (a book with no part divisions): it gets no Part page.
     implicit: bool = False
+    ignored: list = field(default_factory=list)
+
+
+def line_groups(lines: list) -> list:
+    """[(align, [text, ...])]: runs of consecutive lines with the same alignment."""
+    groups = []
+    for align, text in lines:
+        if groups and groups[-1][0] == align:
+            groups[-1][1].append(text)
+        else:
+            groups.append((align, [text]))
+    return groups
 
 
 def strip_frontmatter(text: str) -> tuple[str, str]:
@@ -317,11 +334,46 @@ def group_correspondence(body: str) -> str:
     return "\n\n".join(chunks)
 
 
+LABEL_RE = re.compile(r"^(center|left):\s*(.*)$", re.IGNORECASE)
+
+
+def reading_order_is_legacy(lines: list) -> bool:
+    """True for an older Reading Order (temporary, see parse_reading_order):
+    no center:/left: label anywhere, and unlabelled lines under at least half
+    of its chapters (and at least two), as POV/date lines were written. A
+    stray note under one chapter of a new book doesn't count."""
+    if any(LABEL_RE.match(line.strip()) for line in lines):
+        return False
+    chapters = with_lines = 0
+    in_head = counted = False
+    for line in lines:
+        text = line.strip()
+        if text.startswith("## "):
+            chapters, in_head, counted = chapters + 1, True, False
+        elif text.startswith("#") or SCENE_BULLET_RE.match(text) or FM_BULLET_RE.match(text):
+            in_head = False
+        elif in_head and text and not counted:
+            with_lines, counted = with_lines + 1, True
+    return with_lines >= max(2, chapters / 2)
+
+
 def parse_reading_order(path: Path):
     """Parse Manuscript Reading Order.md into (front_matter, parts, back_matter).
     front_matter/back_matter are lists of filenames (no extension); parts is
-    a list of Part, each holding its Chapters in reading order."""
-    lines = path.read_text(encoding="utf-8").splitlines()
+    a list of Part, each holding its Chapters in reading order.
+
+    Lines under a part or chapter heading that start with "center:" or
+    "left:" are printed under its title, in that alignment, keeping their
+    Obsidian *italic* / **bold** formatting. Other lines there are ignored
+    (collected in .ignored so the book check can list them). %%comments%%
+    are removed first, so notes to yourself are safe anywhere.
+
+    Older vaults (see reading_order_is_legacy) keep the old reading: under
+    a chapter, the first plain line is centred in bold (a POV name) and the
+    rest are left-aligned (dates); under a part, ">" lines are a centred
+    italic epigraph. (Temporary, until those vaults are converted.)"""
+    lines = [COMMENT_RE.sub("", line) for line in path.read_text(encoding="utf-8").splitlines()]
+    legacy = reading_order_is_legacy(lines)
     front_matter: list[str] = []
     back_matter: list[str] = []
     parts: list[Part] = []
@@ -329,6 +381,32 @@ def parse_reading_order(path: Path):
     current_part = None
     current_chapter = None
     past_title = False
+
+    def heading_lines(i: int, target, is_chapter: bool) -> int:
+        """Read the lines under a heading into target.lines / .ignored; return the next index."""
+        plain = []
+        while i < len(lines):
+            line = lines[i].strip()
+            if not line:
+                i += 1
+                continue
+            if line.startswith("#") or SCENE_BULLET_RE.match(line) or FM_BULLET_RE.match(line):
+                break
+            label = LABEL_RE.match(line)
+            if label and label.group(2).strip():
+                target.lines.append((label.group(1).lower(), label.group(2).strip()))
+            elif label:
+                pass  # an empty "center:" prints nothing
+            elif legacy and is_chapter:
+                plain.append(line)
+            elif legacy and line.startswith(">"):
+                target.lines.append(("center", f"*{line[1:].strip()}*"))
+            else:
+                target.ignored.append(line)
+            i += 1
+        if plain:
+            target.lines = [("center", f"**{plain[0]}**")] + [("left", t) for t in plain[1:]]
+        return i
 
     i, n = 0, len(lines)
     while i < n:
@@ -354,20 +432,7 @@ def parse_reading_order(path: Path):
                 current_part = Part(title="", implicit=True)
                 parts.append(current_part)
             current_part.chapters.append(current_chapter)
-            i += 1
-            header_lines = []
-            while i < n:
-                s2 = lines[i].strip()
-                if not s2:
-                    i += 1
-                    continue
-                if s2.startswith("#") or SCENE_BULLET_RE.match(s2) or FM_BULLET_RE.match(s2):
-                    break
-                header_lines.append(s2)
-                i += 1
-            if header_lines:
-                current_chapter.pov = header_lines[0]
-            current_chapter.subtitle_lines = header_lines[1:]
+            i = heading_lines(i + 1, current_chapter, True)
             continue
 
         if stripped.startswith("# "):
@@ -378,19 +443,7 @@ def parse_reading_order(path: Path):
             current_part = Part(title=stripped[2:].strip())
             parts.append(current_part)
             current_chapter = None
-            i += 1
-            epigraph_lines = []
-            while i < n:
-                st2 = lines[i].strip()
-                if not st2:
-                    i += 1
-                    continue
-                if st2.startswith(">"):
-                    epigraph_lines.append(st2[1:].strip())
-                    i += 1
-                    continue
-                break
-            current_part.epigraph = epigraph_lines
+            i = heading_lines(i + 1, current_part, False)
             continue
 
         scene_m = SCENE_BULLET_RE.match(stripped)
@@ -555,6 +608,26 @@ def check_vault(vault: Path, book_info: dict) -> int:
         for p in sorted(orphans, key=lambda p: str(p.relative_to(vault))):
             print(f"  - {p.relative_to(vault)}")
 
+    ignored = [(p.title or "the book", line) for p in parts for line in p.ignored]
+    ignored += [(c.title, line) for p in parts for c in p.chapters for line in c.ignored]
+    if ignored:
+        print("WARNING: these lines in Manuscript Reading Order.md aren't printed. To print a line under a "
+              "part or chapter title, start it with center: or left: (formatting like *italic* works):")
+        for where, line in ignored:
+            print(f"  - under {where}: {line}")
+    if reading_order_is_legacy([COMMENT_RE.sub("", l)
+                                for l in reading_order_path.read_text(encoding="utf-8").splitlines()]):
+        old = [(p.title, f"{align}: {t}") for p in parts for align, t in p.lines]
+        old += [(c.title, f"{align}: {t}") for p in parts for c in p.chapters for align, t in c.lines]
+        if old:
+            print("WARNING: lines under part and chapter titles in Manuscript Reading Order.md have no "
+                  "center: or left: label. They're printed the old way for now. To keep them as they are, "
+                  "write them like this:")
+            for where, text in old[:20]:
+                print(f"  - under {where}: {text}")
+            if len(old) > 20:
+                print(f"  - ...and {len(old) - 20} more")
+
     leftovers = placeholder_leftovers(vault, book_info, [file_index[f] for f, _ in refs if f in file_index])
     if leftovers:
         print("WARNING: the starter vault's example text is still in your book. Replace it before "
@@ -595,26 +668,26 @@ def build_document(vault: Path, book_info: dict) -> str:
             chunks.append(BLANK_LINE)
             chunks.append(f"::: {{.partsubtitle}}\n**{subtitle}**\n:::")
 
-        if part.epigraph:
+        for align, texts in line_groups(part.lines):
             chunks.append(BLANK_LINE)
             chunks.append(BLANK_LINE)
-            poem = "\n".join(f"*{line}*  " for line in part.epigraph)
-            chunks.append(f"::: {{.epigraph}}\n{poem}\n:::")
+            css = "epigraph" if align == "center" else "partleft"
+            chunks.append(f"::: {{.{css}}}\n" + "\n".join(f"{t}  " for t in texts) + "\n:::")
 
         for chapter in part.chapters:
-            chunks.append(f"## {chapter.title.upper()}")
-            if chapter.pov or chapter.subtitle_lines:
+            chunks.append(f"## {chapter.title}")
+            groups = line_groups(chapter.lines)
+            if groups:
                 chunks.append(BLANK_LINE)
                 chunks.append(BLANK_LINE)
-            if chapter.pov:
-                chunks.append(f"::: {{.povname}}\n**{chapter.pov}**\n:::")
-                chunks.append(BLANK_LINE)
-            if chapter.pov and chapter.subtitle_lines:
-                chunks.append(BLANK_LINE)
-            if chapter.subtitle_lines:
-                subtitle_md = "  \n".join(chapter.subtitle_lines)
-                chunks.append(f"::: {{.chapterdate}}\n{subtitle_md}\n:::")
-            if chapter.pov or chapter.subtitle_lines:
+            for k, (align, texts) in enumerate(groups):
+                css = "povname" if align == "center" else "chapterdate"
+                chunks.append(f"::: {{.{css}}}\n" + "  \n".join(texts) + "\n:::")
+                if align == "center":
+                    chunks.append(BLANK_LINE)
+                    if k < len(groups) - 1:
+                        chunks.append(BLANK_LINE)
+            if groups:
                 chunks.append(BLANK_LINE)
                 chunks.append(BLANK_LINE)
 

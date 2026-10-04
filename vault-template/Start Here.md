@@ -59,15 +59,39 @@ what order. Folder names don't matter, only this note does.
   under the chapter with the note's name between double square brackets:
   `- [[My New Scene]]`. Obsidian suggests names as you type `[[`.
 - **A new chapter**: in the Reading Order, add a line starting with `## `
-  and the chapter title, then the scene lines under it. A plain line right
-  under the title (like a character's name) is printed under the chapter
-  title, as in the example.
-- **Parts**: a line starting with `# ` begins a part, like
-  `# Part I The Beginning`. The `>` lines under it are an optional short
-  epigraph. Book not divided into parts? Delete the part line and its `>`
-  lines, and list your chapters directly.
+  and the chapter title, then the scene lines under it. The title is
+  printed exactly as you type it, for example `## Chapter 2` or
+  `## The Storm`.
 - **Front and back matter**: these lines end with *_Front Matter_* or
   *_Back Matter_*. Delete a line to leave that page out.
+
+### Optional extras
+
+Most books need nothing more than chapters and scenes. If you want more:
+
+- **Parts**: a line starting with `# ` begins a part, with its own page,
+  for example `# Part I The Beginning`. Chapters listed under it belong to
+  that part. Without any `# ` lines, the book simply has no parts.
+- **Lines under a part or chapter title**: start a line with `center:` or
+  `left:` and it's printed under the title, centred or left-aligned. Use
+  Obsidian's usual formatting inside it: `center: *A line of poetry*` is
+  italic, `center: **Anna**` is bold. For example:
+
+  ```
+  # Part I The Beginning
+  center: *Every road begins*
+  center: *with a single step*
+
+  ## Chapter 1
+  center: **Anna**
+  left: London, 1952
+  - [[01 - Opening Scene]]
+  ```
+
+- **Notes to yourself**: anything between `%%` marks, like
+  `%%move this chapter?%%`, is ignored. Any other line under a title that
+  doesn't start with `center:` or `left:` is left out of the book, and the
+  book check lists it so you can see.
 
 If a scene doesn't appear in your book, it's almost always missing from the
 Reading Order, or its name there is spelled differently from the note.

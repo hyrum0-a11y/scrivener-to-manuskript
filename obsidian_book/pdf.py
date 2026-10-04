@@ -60,7 +60,7 @@ from pathlib import Path
 import pymupdf as fitz
 import weasyprint
 
-from obsidian_book.epub import (TITLE_PAGE, BookError, parse_title_page, scene_break, load_vault, parse_reading_order, resolve_output_dir,
+from obsidian_book.epub import (TITLE_PAGE, BookError, line_groups, parse_title_page, scene_break, load_vault, parse_reading_order, resolve_output_dir,
                                 safe_filename)
 
 FRONTMATTER_TITLE_RE = re.compile(r'^title:\s*"(.*)"\s*$', re.MULTILINE)
@@ -417,7 +417,7 @@ def build_html(vault: Path, book_info: dict) -> tuple:
             for chapter in part.chapters:
                 toc_items.append(
                     f'<p class="toc-entry"><a href="#chapter-{chapter_idx_global}">'
-                    f'{html.escape(chapter.title.upper())}</a></p>'
+                    f'{md_inline_to_html(chapter.title)}</a></p>'
                 )
                 chapter_idx_global += 1
             continue
@@ -452,9 +452,9 @@ def build_html(vault: Path, book_info: dict) -> tuple:
         heading, subtitle = (m.group(1).upper(), m.group(2)) if m else (part.title, "")
         anchor = f"part-{idx}"
         epigraph_html = ""
-        if part.epigraph:
-            lines = "<br/>".join(md_inline_to_html(l) for l in part.epigraph)
-            epigraph_html = f'<p class="epigraph">{lines}</p>'
+        for k, (align, texts) in enumerate(line_groups(part.lines)):
+            css = ("epigraph" if align == "center" else "partleft") + (" later" if k else "")
+            epigraph_html += f'<p class="{css}">{"<br/>".join(md_inline_to_html(t) for t in texts)}</p>'
         # Part I resets the visible page counter to 1 — see the CSS ".partone"
         # comment for why it needs a page name distinct from other Parts. A
         # book with no Part headings has no Part page, so its first chapter
@@ -477,16 +477,19 @@ def build_html(vault: Path, book_info: dict) -> tuple:
                 recto_class += " partone"
             chapter_anchor = f"chapter-{chapter_idx_global}"
             chapter_idx_global += 1
-            chapter_titles.append(chapter.title.upper())
+            chapter_titles.append(re.sub(r"[*_]", "", chapter.title))
 
             sign_html = ""
             for img in sign_images_for(chapter.pov, signs_dir, pov_sign):
                 sign_html += f'<img class="pov-sign" src="{img.as_uri()}" alt=""/>'
-            pov_html = f'<p class="povname">{html.escape(chapter.pov)}</p>' if chapter.pov else ""
-            date_html = ""
-            if chapter.subtitle_lines:
-                date_lines = "<br/>".join(html.escape(line) for line in chapter.subtitle_lines)
-                date_html = f'<p class="chapterdate">{date_lines}</p>'
+            # Lines under the title; POV sign images go right after the first centred group.
+            header_html, signed = "", False
+            for align, texts in line_groups(chapter.lines):
+                css = "povname" if align == "center" else "chapterdate"
+                header_html += f'<p class="{css}">{"<br/>".join(md_inline_to_html(t) for t in texts)}</p>'
+                if align == "center" and not signed:
+                    header_html += sign_html
+                    signed = True
 
             scenes_html = []
             for i, fname in enumerate(chapter.scenes):
@@ -498,8 +501,8 @@ def build_html(vault: Path, book_info: dict) -> tuple:
 
             sections.append(
                 f'<section class="chapter-page{recto_class}" id="{chapter_anchor}">'
-                f'<h2 class="chapter-heading">{html.escape(chapter.title.upper())}</h2>'
-                f"{pov_html}{sign_html}{date_html}"
+                f'<h2 class="chapter-heading">{md_inline_to_html(chapter.title)}</h2>'
+                f"{header_html}"
                 f'<div class="prose">{"".join(scenes_html)}</div></section>'
             )
 
@@ -678,21 +681,21 @@ h1, h2 {
   text-indent: 0;
   margin-top: 0.6in;
 }
-.epigraph {
+.epigraph, .partleft {
   font-family: 'EB Garamond';
-  font-style: italic;
   font-size: 11pt;
   text-align: center;
   text-indent: 0;
   line-height: 1.8;
   margin-top: 0.8in;
 }
+.partleft { text-align: left; }
+.epigraph.later, .partleft.later { margin-top: 0.2in; }
 
 /* Chapter pages */
 .chapter-heading { font-size: 17pt; margin-top: 0.3in; margin-bottom: 0.35in; }
 .povname {
   font-family: 'Linux Biolinum O';
-  font-weight: bold;
   font-size: 13pt;
   text-align: center;
   text-indent: 0;

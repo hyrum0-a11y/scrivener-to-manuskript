@@ -102,7 +102,7 @@ def test_epub_round_trip_of_starter_vault(tmp_path):
     epub = build_epub(TEMPLATE, tmp_path / "out")
     vault = import_epub(epub, tmp_path / "v")
     assert_compiles(vault)
-    assert [c for _, chs in structure(vault) for c in chs][0][0].upper() == "1. EXAMPLE CHAPTER TITLE"
+    assert [c for _, chs in structure(vault) for c in chs][0][0] == "Chapter 1"
     info = (vault / "Book Info.md").read_text()
     assert 'title: "My Novel"' in info and 'author: "Your Name"' in info
 
@@ -123,7 +123,7 @@ def test_epub_nested_parts_front_back_and_scenes(tmp_path):
     assert structure(vault) == [("Part One", [("Chapter 1", "", 2), ("Chapter 2", "", 3)])]
     order = (vault / "Manuscript Reading Order.md").read_text()
     assert "- [[Copyright]]  _Front Matter_" in order and "- [[About the Author]]  _Back Matter_" in order
-    assert "> A short epigraph" in order
+    assert "center: *A short epigraph*" in order
     info = (vault / "Book Info.md").read_text()
     assert 'isbn: "9781234567897"' in info and 'cover: "cover.png"' in info and 'author_file_as: "Author, Ann"' in info
     assert (vault / "cover.png").read_bytes() == PNG_1PX
@@ -148,7 +148,7 @@ def test_epub_flat_contents_with_chapters_found_in_headings(tmp_path):
         ("PART I THE START", [("ONE", "Taylor", 1), ("TWO", "Gerald", 2)]),
         ("PART II THE END", [("THREE", "Sadi", 1), ("FOUR", "Sadi", 1)]),
     ]
-    assert "> Line one of a poem" in (vault / "Manuscript Reading Order.md").read_text()
+    assert "center: *Line one of a poem*" in (vault / "Manuscript Reading Order.md").read_text()
 
 
 @needs_pandoc
@@ -236,7 +236,7 @@ def test_scrivener_project_to_vault(tmp_path):
     # The loose text after the part stays in that part, like the EPUB importer.
     assert structure(vault) == [("Part One", [("Chapter 1", "Taylor", 3), ("Epilogue", "", 1)])]
     order = (vault / "Manuscript Reading Order.md").read_text()
-    assert "> An epigraph line" in order and "May 2009" in order
+    assert "center: *An epigraph line*" in order and "May 2009" in order
     assert "- [[Copyright]]  _Front Matter_" in order and "Title Page" not in order
     assert "Excluded" not in "".join(p.read_text() for p in vault.rglob("*.md"))
     assert "Research notes" not in "".join(p.read_text() for p in vault.rglob("*.md"))
@@ -342,3 +342,15 @@ def test_import_without_cover_gets_placeholder_and_guide(tmp_path):
     assert (vault / "cover.jpg").read_bytes() == (TEMPLATE / "cover.jpg").read_bytes()
     assert "The cover is a placeholder" in (vault / "Book Info.md").read_text()
     assert (vault / "Start Here.md").is_file()
+
+
+@needs_pandoc
+def test_epub_nested_contents_under_a_non_part_title(tmp_path):
+    # A contents entry named like anything (not "Part ...") with entries under it and
+    # little text of its own is a Part. This used to crash (undefined helper).
+    files = {"p.xhtml": "<h1>The Early Years</h1>",
+             "c1.xhtml": f"<h2>Chapter 1</h2><p>{PROSE}</p>", "c2.xhtml": f"<h2>Chapter 2</h2><p>{PROSE}</p>"}
+    epub = make_epub(tmp_path, [("The Early Years", "p.xhtml")], files,
+                     nested={"The Early Years": [("Chapter 1", "c1.xhtml"), ("Chapter 2", "c2.xhtml")]})
+    vault = import_epub(epub, tmp_path / "v")
+    assert structure(vault) == [("The Early Years", [("Chapter 1", "", 1), ("Chapter 2", "", 1)])]

@@ -116,21 +116,16 @@ def test_untrusted_build_drops_server_files(tmp_path):
 
 
 def make_partless_vault(tmp_path):
-    """The template with its Part heading removed: chapters sit directly
+    """The starter vault, which has no Part heading: chapters sit directly
     under the book, as in a novel with no part divisions."""
-    v = make_vault(tmp_path)
-    order = v / "Manuscript Reading Order.md"
-    text = order.read_text()
-    start = text.index("# Part")
-    order.write_text(text[:start] + text[text.index("## ", start):])
-    return v
+    return make_vault(tmp_path)
 
 
 def test_reading_order_without_parts_keeps_chapters(tmp_path):
     from obsidian_book.epub import parse_reading_order
     _, parts, _ = parse_reading_order(make_partless_vault(tmp_path) / "Manuscript Reading Order.md")
     assert len(parts) == 1 and parts[0].implicit
-    assert [c.title for c in parts[0].chapters] == ["1. Example Chapter Title"]
+    assert [c.title for c in parts[0].chapters] == ["Chapter 1"]
     assert parts[0].chapters[0].scenes == ["01 - Opening Scene"]
 
 
@@ -140,7 +135,7 @@ def test_epub_without_parts_has_no_part_page(tmp_path):
     with zipfile.ZipFile(epub) as zf:
         nav = zf.read("EPUB/nav.xhtml").decode()
         text = b"".join(zf.read(n) for n in zf.namelist() if n.endswith(".xhtml")).decode()
-    assert "1. EXAMPLE CHAPTER TITLE" in nav
+    assert "Chapter 1" in nav
     assert "PART I" not in text and "Opening Scene" not in nav
 
 
@@ -150,7 +145,49 @@ def test_pdf_without_parts_lists_chapters(tmp_path):
     from obsidian_book.pdf import build_pdf
     pdf = build_pdf(make_partless_vault(tmp_path), tmp_path / "out", untrusted=True)
     text = "".join(page.get_text() for page in pymupdf.open(pdf))
-    assert "1. EXAMPLE CHAPTER TITLE—1" in text and "PART I" not in text
+    assert "Chapter 1—1" in text and "PART I" not in text
+
+
+def write_order(tmp_path, body: str) -> Path:
+    path = tmp_path / "Manuscript Reading Order.md"
+    path.write_text("# Book — Reading Order\n\n" + body)
+    return path
+
+
+def test_labelled_lines_under_parts_and_chapters(tmp_path):
+    from obsidian_book.epub import parse_reading_order
+    _, parts, _ = parse_reading_order(write_order(tmp_path, (
+        "# Part I The Start\ncenter: *A poem line*\nleft: Plain\n> old epigraph\n\n"
+        "## The Storm\ncenter: **Anna**\nleft: London, 1952\nneeds a rewrite\n%%a note%%\n- [[s1]]\n")))
+    part, chapter = parts[0], parts[0].chapters[0]
+    assert part.lines == [("center", "*A poem line*"), ("left", "Plain")] and part.ignored == ["> old epigraph"]
+    assert chapter.title == "The Storm" and chapter.pov == "Anna"
+    assert chapter.lines == [("center", "**Anna**"), ("left", "London, 1952")]
+    assert chapter.ignored == ["needs a rewrite"] and chapter.scenes == ["s1"]
+
+
+def test_old_unlabelled_reading_order_still_reads_the_old_way(tmp_path):
+    from obsidian_book.epub import parse_reading_order
+    _, parts, _ = parse_reading_order(write_order(tmp_path, (
+        "# Part I Momentum\n> After the fire\n\n## One\nGerald\nJanuary 2009\n- [[a]]\n\n## Two\nGerald\n- [[b]]\n")))
+    assert parts[0].lines == [("center", "*After the fire*")]
+    assert parts[0].chapters[0].lines == [("center", "**Gerald**"), ("left", "January 2009")]
+
+
+def test_stray_note_in_a_new_book_is_not_printed(tmp_path):
+    from obsidian_book.epub import parse_reading_order
+    _, parts, _ = parse_reading_order(write_order(tmp_path, "## Chapter 1\nneeds a rewrite\n- [[a]]\n\n## Chapter 2\n- [[b]]\n"))
+    assert parts[0].chapters[0].lines == [] and parts[0].chapters[0].ignored == ["needs a rewrite"]
+
+
+def test_check_lists_ignored_lines(tmp_path, capsys):
+    from obsidian_book.epub import check_vault, load_vault
+    vault = make_vault(tmp_path)
+    order = vault / "Manuscript Reading Order.md"
+    order.write_text(order.read_text().replace("## Chapter 1\n", "## Chapter 1\ncenter: **Anna**\nfix this\n"))
+    check_vault(*load_vault(vault))
+    out = capsys.readouterr().out
+    assert "aren't printed" in out and "under Chapter 1: fix this" in out
 
 
 # --- app end to end -------------------------------------------------------------

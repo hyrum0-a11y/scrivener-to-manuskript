@@ -131,6 +131,7 @@ from obsidian_book.epub import (
     strip_frontmatter,
     resolve_output_dir,
     TITLE_PAGE,
+    line_groups,
     markdown_literal,
     scene_break,
     parse_title_page,
@@ -213,7 +214,7 @@ def patch_named_styles(xml: str) -> str:
 </style:style>
 <style:style style:name="POVName" style:family="paragraph" style:parent-style-name="Standard">
   <style:paragraph-properties fo:text-align="center" fo:text-indent="0in" fo:margin-bottom="0.12in" />
-  <style:text-properties fo:font-family="{HEADING_FONT}" fo:font-weight="bold" fo:font-size="13pt" />
+  <style:text-properties fo:font-family="{HEADING_FONT}" fo:font-size="13pt" />
 </style:style>
 <style:style style:name="ChapterDate" style:family="paragraph" style:parent-style-name="Standard">
   <style:paragraph-properties fo:text-align="left" fo:text-indent="0in" fo:margin-top="0.1in" fo:margin-bottom="0.3in" />
@@ -225,7 +226,7 @@ def patch_named_styles(xml: str) -> str:
 </style:style>
 <style:style style:name="Epigraph" style:family="paragraph" style:parent-style-name="Standard">
   <style:paragraph-properties fo:text-align="center" fo:text-indent="0in" fo:margin-top="0.4in" fo:line-height="180%" />
-  <style:text-properties fo:font-family="{BODY_FONT}" fo:font-style="italic" fo:font-size="11pt" />
+  <style:text-properties fo:font-family="{BODY_FONT}" fo:font-size="11pt" />
 </style:style>
 <style:style style:name="Noindent" style:family="paragraph" style:parent-style-name="Text_20_body">
   <style:paragraph-properties fo:text-indent="0in" />
@@ -666,19 +667,17 @@ def build_document_odt(vault: Path, book_info: dict) -> str:
             chunks.append(f"# {heading} {{#{part_tag}}}")
         if subtitle_part:
             chunks.append(f'::: {{custom-style="PartSubtitle"}}\n{subtitle_part}\n:::')
-        if part.epigraph:
-            poem = "  \n".join(part.epigraph)
+        for _, texts in line_groups(part.lines):
+            poem = "  \n".join(texts)
             chunks.append(f'::: {{custom-style="Epigraph"}}\n{poem}\n:::')
 
         for chapter in part.chapters:
             chapter_id_attr = f" {{#chapter-open-{global_chapter_idx}}}"
             global_chapter_idx += 1
-            chunks.append(f"## {chapter.title.upper()}{chapter_id_attr}")
-            if chapter.pov:
-                chunks.append(f'::: {{custom-style="POVName"}}\n{chapter.pov}\n:::')
-            if chapter.subtitle_lines:
-                subtitle_md = "  \n".join(chapter.subtitle_lines)
-                chunks.append(f'::: {{custom-style="ChapterDate"}}\n{subtitle_md}\n:::')
+            chunks.append(f"## {chapter.title}{chapter_id_attr}")
+            for align, texts in line_groups(chapter.lines):
+                style = "POVName" if align == "center" else "ChapterDate"
+                chunks.append(f'::: {{custom-style="{style}"}}\n' + "  \n".join(texts) + "\n:::")
 
             scenes = chapter.scenes
             for i, fname in enumerate(scenes):

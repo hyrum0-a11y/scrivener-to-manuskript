@@ -15,6 +15,10 @@ The conversions run as free web tools at https://authortools.hyrumjones.com. The
   `Book` that `importer.py`'s `write_vault()` lays out as a vault. Their docstrings explain the structure guessing.
   Structure comes from the vault's `Manuscript Reading Order.md`; see the docstring at the top of `epub.py`.
   Parts are optional. Chapters listed before any `# Part` heading compile with no Part page.
+  Under a `#` part or `##` chapter heading, only `center:` / `left:` lines print (Obsidian *italic*/**bold** kept);
+  other lines are ignored and listed by the check; `%%comments%%` are stripped. Chapter titles print as typed.
+  TEMPORARY: `reading_order_is_legacy()` keeps the old positional POV/date lines and `>` epigraphs for Rum's
+  unconverted vaults. Remove it once Rum has converted SilentSub1/2, Sky's the Limit and the Saldari vaults.
 - `webapp/`: Flask app (home page, `/convert` upload, `/import/epub` and `/import/scrivener`, job queue,
   `/starter-vault.zip`). Converter status: a header badge on every page (`status.js` polls `/queue`) and a
   `/status` page with a 24-hour jobs chart; `jobs.py` keeps that history in memory (no titles, lost on restart). Import jobs use the format name `vault`; see `runner.py`.

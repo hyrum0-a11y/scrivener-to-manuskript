@@ -51,7 +51,7 @@ from xml.sax.saxutils import escape as xml_escape
 
 from obsidian_book.epub import (
     BLANK_LINE, CENTERED_HIDDEN_HEADING_TITLES, PART_TITLE_RE, TITLE_PAGE, UNTRUSTED_FILTER, BookError,
-    check_vault, expand_paragraphs, markdown_literal, scene_break, group_correspondence, index_vault_files, load_vault,
+    check_vault, expand_paragraphs, line_groups, markdown_literal, scene_break, group_correspondence, index_vault_files, load_vault,
     parse_reading_order, parse_title_page, render_paragraph_groups, resolve_output_dir, safe_filename,
     split_first_paragraph, strip_cuts, strip_frontmatter,
 )
@@ -129,8 +129,11 @@ def style_xml() -> str:
         _style("TocEntry", _spacing(115, 115) + CENTER),
         # Parts and chapters
         _style("PartSubtitle", _spacing(twips(0.6), 0) + CENTER, HEADING + pt(22)),
-        _style("Epigraph", _spacing(twips(0.8), 0, 432) + CENTER, "<w:i/><w:iCs/>" + pt(11)),
-        _style("POVName", _spacing(0, 173) + CENTER, HEADING + pt(13)),
+        _style("Epigraph", _spacing(twips(0.8), 0, 432) + CENTER, pt(11)),
+        _style("EpigraphLater", _spacing(twips(0.2), 0, 432) + CENTER, pt(11)),
+        _style("PartLeft", _spacing(twips(0.8), 0, 432) + NO_INDENT + '<w:jc w:val="left"/>', pt(11)),
+        _style("PartLeftLater", _spacing(twips(0.2), 0, 432) + NO_INDENT + '<w:jc w:val="left"/>', pt(11)),
+        _style("POVName", _spacing(0, 173) + CENTER, _font(HEADING_FONT) + pt(13)),
         _style("ChapterDate", _spacing(216, 432) + NO_INDENT + '<w:jc w:val="left"/>', pt(9.5)),
         _style("Dropcap", NO_INDENT),
         _style("DropcapLetter", rpr=_font(BODY_FONT) + pt(31.5), based_on="DefaultParagraphFont", kind="character"),
@@ -263,7 +266,7 @@ def build_markdown(vault: Path, book_info: dict, token: str) -> tuple:
         if part.implicit:
             for chapter in part.chapters:
                 chapter_no += 1
-                doc.add(_div("TocEntry", f"{chapter.title.upper()}—{doc.page_ref(f'chapter-{chapter_no}')}"))
+                doc.add(_div("TocEntry", f"{chapter.title}—{doc.page_ref(f'chapter-{chapter_no}')}"))
             continue
         chapter_no += len(part.chapters)
         m = PART_TITLE_RE.match(part.title)
@@ -279,8 +282,9 @@ def build_markdown(vault: Path, book_info: dict, token: str) -> tuple:
             doc.add(f"# {heading} {{#part-{part_no}}}")
             if subtitle:
                 doc.add(_div("PartSubtitle", subtitle))
-            if part.epigraph:
-                doc.add(_div("Epigraph", "  \n".join(part.epigraph)))
+            for k, (align, texts) in enumerate(line_groups(part.lines)):
+                style = ("Epigraph" if align == "center" else "PartLeft") + ("Later" if k else "")
+                doc.add(_div(style, "  \n".join(texts)))
             # The Part page is one (right-hand) page, so one blank page puts its first
             # chapter on a right-hand page too. Done by hand rather than with an
             # odd-page section break: LibreOffice counts the page such a break inserts
@@ -290,11 +294,9 @@ def build_markdown(vault: Path, book_info: dict, token: str) -> tuple:
             chapter_no += 1
             start = "oddPage" if part.implicit and part_no == 1 and i == 0 else "nextPage"
             doc.section(start, headers=True, restart=part.implicit and part_no == 1 and i == 0)
-            doc.add(f"## {chapter.title.upper()} {{#chapter-{chapter_no}}}")
-            if chapter.pov:
-                doc.add(_div("POVName", chapter.pov))
-            if chapter.subtitle_lines:
-                doc.add(_div("ChapterDate", "  \n".join(chapter.subtitle_lines)))
+            doc.add(f"## {chapter.title} {{#chapter-{chapter_no}}}")
+            for align, texts in line_groups(chapter.lines):
+                doc.add(_div("POVName" if align == "center" else "ChapterDate", "  \n".join(texts)))
             for n, fname in enumerate(chapter.scenes):
                 body = expand_paragraphs(strip_cuts(read(fname)[1]))
                 first, rest = split_first_paragraph(body)
@@ -354,9 +356,9 @@ RESTART = '<w:pgNumType w:start="1"/>'
 
 def _sect_pr(section: Section, page: dict) -> str:
     if section.headers:
-        refs = (f'<w:headerReference w:type="even" r:id="rIdAtEven"/>'
-                f'<w:headerReference w:type="default" r:id="rIdAtOdd"/>'
-                f'<w:headerReference w:type="first" r:id="rIdAtEmpty"/>')
+        refs = ('<w:headerReference w:type="even" r:id="rIdAtEven"/>'
+                '<w:headerReference w:type="default" r:id="rIdAtOdd"/>'
+                '<w:headerReference w:type="first" r:id="rIdAtEmpty"/>')
     else:
         refs = "".join(f'<w:headerReference w:type="{t}" r:id="rIdAtEmpty"/>' for t in ("even", "default", "first"))
     return (f'<w:sectPr>{refs}<w:type w:val="{section.start}"/>'

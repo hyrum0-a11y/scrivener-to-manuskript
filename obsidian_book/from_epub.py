@@ -413,7 +413,7 @@ def _epigraph(pars: list) -> list:
     return []
 
 
-def _own__pars(node: Node) -> list:
+def _own_paragraphs(node: Node) -> list:
     pars = _pars(node.text)
     i = 0
     while i < len(pars) and i < 6 and (_is_heading(pars[i]) or _is_title_line(pars[i], node.title)):
@@ -524,7 +524,7 @@ def build_book(epub_path: Path, max_bytes: int = 200 * 2**20) -> Book:
 
     for node in top[start:end]:
         if _is_part(node):
-            part = start_part(node.title, _epigraph(_own__pars(node)))
+            part = start_part(node.title, _epigraph(_own_paragraphs(node)))
             part.chapters = [c for c in (_chapter(ch) for ch in node.children) if c.scenes]
             continue
         split = None if node.children else _split_leaf(node)

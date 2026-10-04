@@ -241,13 +241,14 @@ def write_vault(book: Book, dest: Path) -> Path:
         if part.title:
             part_dir = part_dir / f"{part_no:02d} - {safe_name(part.title, 60)}"
             order += ["", f"# {_quote(part.title)}"]
-            order += [f"> {_quote(line)}" for line in part.epigraph if line.strip()]
+            order += [f"center: *{_quote(line)}*" for line in part.epigraph if line.strip()]
         for chapter in part.chapters:
             chapter_no += 1
             chapter_dir = part_dir / f"{chapter_no:02d} - {safe_name(chapter.title, 60)}"
             order += ["", f"## {_quote(chapter.title)}"]
             if chapter.pov:
-                order += [_quote(line) for line in [chapter.pov, *chapter.subtitle_lines] if line.strip()]
+                order.append(f"center: **{_quote(chapter.pov)}**")
+            order += [f"left: {_quote(line)}" for line in chapter.subtitle_lines if line.strip()]
             for scene_no, scene in enumerate(chapter.scenes, start=1):
                 stem = f"{chapter_no:02d}-{scene_no:02d} {safe_name(scene.title or chapter.title, 60)}"
                 stem = write_note(chapter_dir, stem, scene.title or chapter.title, "Manuscript", scene.body)
